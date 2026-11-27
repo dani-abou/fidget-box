@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Fidget Box</title>
+<meta name="description" content="Little fidget toys for the ride. No ads, ever. Works offline.">
+<meta name="theme-color" content="#F2EEFB" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1E1B30" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fidget Box">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preload" href="fonts/fredoka-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <button id="back" class="hbtn" hidden aria-label="Back to all toys">‹ All toys</button>
+    <span id="title"></span>
+    <span class="spacer"></span>
+    <button id="snd" class="chip" aria-pressed="true">Sound</button>
+    <button id="vib" class="chip" aria-pressed="true">Buzz</button>
+  </header>
+
+  <main>
+  <section id="home">
+    <h1>Fidget Box</h1>
+    <p class="sub" id="sub">Little toys for the ride. No ads, ever.</p>
+    <div class="tiles" id="tiles"></div>
+    <p class="ver" id="ver"></p>
+  </section>
+
+  <section id="play" hidden><div id="stage"></div></section>
+  </main>
+</div>
+<button id="toast" class="toast" type="button" aria-live="polite">Update ready, tap to reload</button>
+</body>
+</html>
