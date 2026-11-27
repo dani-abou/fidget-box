@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Moon on Black: a slim gold crescent and one tiny star, nothing else -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF4CC"/><stop offset=".6" stop-color="#F2C35B"/><stop offset="1" stop-color="#C98E2A"/></linearGradient>
+    <mask id="m"><rect width="512" height="512" fill="#fff"/><circle cx="300" cy="214" r="148" fill="#000"/></mask>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="16"/></filter>
+  </defs>
+  <!--bg--><rect width="512" height="512" fill="#000"/><!--/bg-->
+  <!--art-->
+  <circle cx="240" cy="266" r="154" fill="#F2C35B" mask="url(#m)" filter="url(#glow)" opacity=".35"/>
+  <circle cx="240" cy="266" r="154" fill="url(#g)" mask="url(#m)"/>
+  <path d="M380 318l5 13 13 5-13 5-5 13-5-13-13-5 13-5z" fill="#FFF4CC"/>
+  <!--/art-->
+</svg>

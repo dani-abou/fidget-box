@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Eclipse: a black disc with a bright golden corona -->
+  <defs>
+    <radialGradient id="corona" cx=".5" cy=".5" r=".5"><stop offset=".55" stop-color="#FFE7A3" stop-opacity="1"/><stop offset=".62" stop-color="#FFB547" stop-opacity=".8"/><stop offset=".8" stop-color="#FF6A3D" stop-opacity=".25"/><stop offset="1" stop-color="#FF6A3D" stop-opacity="0"/></radialGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+  <!--bg--><rect width="512" height="512" fill="#020203"/><!--/bg-->
+  <!--art-->
+  <circle cx="256" cy="256" r="220" fill="url(#corona)"/>
+  <circle cx="256" cy="256" r="124" fill="none" stroke="#FFFBEA" stroke-width="8" filter="url(#blur)"/>
+  <circle cx="256" cy="256" r="122" fill="#020203"/>
+  <circle cx="352" cy="190" r="9" fill="#FFFBEA" filter="url(#blur)"/>
+  <!--/art-->
+</svg>

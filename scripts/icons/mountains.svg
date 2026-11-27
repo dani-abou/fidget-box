@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Mountains: a crescent rising over layered violet mountains at night -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0A0B26"/><stop offset=".65" stop-color="#3B1D5E"/><stop offset="1" stop-color="#7A3A7E"/></linearGradient>
+    <linearGradient id="moon" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF7D6"/><stop offset="1" stop-color="#FFC95C"/></linearGradient>
+    <mask id="m"><rect width="512" height="512" fill="#fff"/><circle cx="322" cy="142" r="70" fill="#000"/></mask>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="18"/></filter>
+  </defs>
+  <!--bg--><rect width="512" height="512" fill="url(#sky)"/><!--/bg-->
+  <!--art-->
+  <circle cx="276" cy="186" r="86" fill="#FFD36E" mask="url(#m)" filter="url(#glow)" opacity=".5"/>
+  <circle cx="276" cy="186" r="86" fill="url(#moon)" mask="url(#m)"/>
+  <g fill="#fff"><circle cx="120" cy="120" r="3"/><circle cx="410" cy="250" r="2.5"/><circle cx="170" cy="230" r="2"/><circle cx="420" cy="110" r="3"/></g>
+  <path d="M0 400 110 300 190 360 290 262 400 350 512 290V512H0z" fill="#4B2370"/>
+  <path d="M0 450 90 380 170 420 260 350 350 410 440 360 512 400V512H0z" fill="#2C1450"/>
+  <path d="M0 512V476L120 430 220 470 330 420 430 466 512 440V512z" fill="#170A30"/>
+  <!--/art-->
+</svg>

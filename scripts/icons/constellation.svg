@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Constellation: a thin crescent beside a few stars linked by fine lines -->
+  <defs>
+    <radialGradient id="sky" cx=".3" cy=".3" r="1"><stop offset="0" stop-color="#141A44"/><stop offset="1" stop-color="#03040C"/></radialGradient>
+    <mask id="m"><rect width="512" height="512" fill="#fff"/><circle cx="206" cy="186" r="92" fill="#000"/></mask>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="6"/></filter>
+  </defs>
+  <!--bg--><rect width="512" height="512" fill="url(#sky)"/><!--/bg-->
+  <!--art-->
+  <circle cx="166" cy="216" r="96" fill="#FFF1C9" mask="url(#m)"/>
+  <g stroke="#9FB2FF" stroke-width="2.5" opacity=".7" fill="none"><path d="M270 330 330 280 400 300 380 380 300 410 270 330 M400 300 430 220"/></g>
+  <g fill="#fff">
+    <circle cx="270" cy="330" r="7" filter="url(#glow)"/><circle cx="270" cy="330" r="5"/>
+    <circle cx="330" cy="280" r="5"/><circle cx="400" cy="300" r="8" filter="url(#glow)"/><circle cx="400" cy="300" r="6"/>
+    <circle cx="380" cy="380" r="5"/><circle cx="300" cy="410" r="4"/><circle cx="430" cy="220" r="5"/>
+    <circle cx="110" cy="400" r="2.5"/><circle cx="440" cy="110" r="2"/>
+  </g>
+  <!--/art-->
+</svg>

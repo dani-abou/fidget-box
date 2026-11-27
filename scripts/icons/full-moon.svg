@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full Moon: a softly glowing moon with gentle craters on deep indigo -->
+  <defs>
+    <radialGradient id="sky" cx=".5" cy=".45" r=".75"><stop offset="0" stop-color="#232A63"/><stop offset=".6" stop-color="#0E1236"/><stop offset="1" stop-color="#04050F"/></radialGradient>
+    <radialGradient id="face" cx=".4" cy=".35" r=".75"><stop offset="0" stop-color="#FFFDF2"/><stop offset=".7" stop-color="#E8E2CF"/><stop offset="1" stop-color="#C9C1AA"/></radialGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="30"/></filter>
+  </defs>
+  <!--bg--><rect width="512" height="512" fill="url(#sky)"/><!--/bg-->
+  <!--art-->
+  <circle cx="256" cy="256" r="150" fill="#FFF3C8" filter="url(#glow)" opacity=".55"/>
+  <circle cx="256" cy="256" r="140" fill="url(#face)"/>
+  <g fill="#BDB49A" opacity=".55"><circle cx="210" cy="220" r="28"/><circle cx="300" cy="300" r="22"/><circle cx="290" cy="196" r="12"/><circle cx="222" cy="318" r="14"/><circle cx="330" cy="250" r="9"/></g>
+  <g fill="#fff"><circle cx="96" cy="112" r="3.5"/><circle cx="430" cy="96" r="3"/><circle cx="420" cy="420" r="3.5"/><circle cx="84" cy="404" r="2.5"/></g>
+  <!--/art-->
+</svg>

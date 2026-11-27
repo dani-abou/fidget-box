@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Dusk: a white crescent on a soft pink-to-violet evening sky -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2B1B5A"/><stop offset=".55" stop-color="#8A4FA8"/><stop offset="1" stop-color="#F29BB4"/></linearGradient>
+    <mask id="m"><rect width="512" height="512" fill="#fff"/><circle cx="304" cy="212" r="128" fill="#000"/></mask>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18"/></filter>
+  </defs>
+  <!--bg--><rect width="512" height="512" fill="url(#sky)"/><!--/bg-->
+  <!--art-->
+  <circle cx="244" cy="262" r="136" fill="#fff" mask="url(#m)" filter="url(#glow)" opacity=".45"/>
+  <circle cx="244" cy="262" r="136" fill="#FFF8FB" mask="url(#m)"/>
+  <g fill="#fff"><path d="M386 330l5 13 13 5-13 5-5 13-5-13-13-5 13-5z"/><circle cx="400" cy="160" r="4"/><circle cx="140" cy="130" r="3"/></g>
+  <!--/art-->
+</svg>
