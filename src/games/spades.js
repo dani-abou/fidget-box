@@ -230,6 +230,16 @@ export default {
 @keyframes turnring{to{box-shadow:0 4px 0 var(--outline),0 0 0 5px rgba(255,210,90,.9),0 0 22px rgba(255,210,90,.6)}}
 .sp-tag{font-size:12px;font-weight:600;color:#fff;background:rgba(5,25,15,.65);border-radius:999px;padding:1px 9px;white-space:nowrap}
 .sp-tag b{color:var(--butter)}
+.sp-pips{display:flex;flex-wrap:wrap;justify-content:center;gap:3px;max-width:92px;margin-top:1px}
+.sp-pips i{width:11px;height:11px;border-radius:50%;background:rgba(5,25,15,.45);border:2px solid rgba(5,25,15,.7)}
+.sp-pips i.won{background:radial-gradient(circle at 35% 30%,#FFF6C8,#FFD25A 60%);border-color:#2B1D3A}
+.sp-pips i.over{background:radial-gradient(circle at 35% 30%,#E9FDFF,#5EF0FF 60%);border-color:#2B1D3A;box-shadow:0 0 8px 2px rgba(94,240,255,.8);animation:spglow 1.2s ease-in-out infinite alternate}
+.sp-pips i.pop{animation:sppop .45s cubic-bezier(.3,1.8,.5,1)}
+.sp-pips i.over.pop{animation:sppop .45s cubic-bezier(.3,1.8,.5,1),spglow 1.2s .45s ease-in-out infinite alternate}
+@keyframes sppop{from{transform:scale(2.2)}}
+@keyframes spglow{to{box-shadow:0 0 12px 4px rgba(94,240,255,.95)}}
+.sp-nil{font-size:10px;font-weight:700;letter-spacing:.5px;padding:1px 7px;border-radius:999px;background:#FFF;color:#2B1D3A;border:2px solid #2B1D3A}
+.sp-nil.bust{background:#FF5A4E;color:#fff}
 .sp-n{top:46px;left:50%;transform:translateX(-50%)}
 .sp-w{left:26px;top:40%;transform:translateY(-50%)}
 .sp-e{right:26px;top:40%;transform:translateY(-50%)}
@@ -251,7 +261,8 @@ export default {
 .sp-score{position:absolute;z-index:3;min-width:84px;text-align:center;border-radius:14px;padding:4px 10px 6px;border:3px solid var(--outline);color:#fff;
   box-shadow:0 4px 0 var(--outline),inset 0 3px 0 rgba(255,255,255,.25)}
 .sp-score small{display:block;font-size:12px;font-weight:600;opacity:.9;letter-spacing:.5px}
-.sp-score b{display:block;font-size:26px;line-height:1.05}
+.sp-score b{display:block;font-size:26px;line-height:1.05;white-space:nowrap}
+.sp-score b.made{color:#9CFFB8} .sp-score b.over{color:#9EF6FF}
 .sp-score span{display:block;font-size:11px;opacity:.9}
 .sp-them{top:6px;right:8px;background:linear-gradient(180deg,#C8404F,#962A3A)}
 .sp-us{bottom:8px;left:8px;background:linear-gradient(180deg,#3F7BE0,#2A57AE)}
@@ -382,22 +393,37 @@ export default {
     }
 
     // ---------- drawing ----------
-    function teamLine(t) {
-      if (!s.bids) return '';
-      const ps = [t, t + 2], bid = ps.filter(p => s.bids[p]).reduce((a, p) => a + s.bids[p], 0), won = ps.reduce((a, p) => a + s.tricks[p], 0);
-      return s.bids.some(b => b === null) ? `Bags ${s.bags[t]}` : `Bid ${bid} · Won ${won}`;
+    // Score box: during a hand, the team's tricks "won of bid" (nil bidders' tricks aside); otherwise the score.
+    function scoreBox(t) {
+      const ps = [t, t + 2], bidding = !s.bids || s.bids.some(b => b === null) || s.phase === 'done';
+      const label = t ? 'THEM' : 'US';
+      if (bidding) return `<small>${label}</small><b>${s.scores[t]}</b><span>Bags ${s.bags[t]}</span>`;
+      const bid = ps.filter(p => s.bids[p]).reduce((a, p) => a + s.bids[p], 0), won = ps.filter(p => s.bids[p]).reduce((a, p) => a + s.tricks[p], 0);
+      return `<small>${label}</small><b class="${won > bid ? 'over' : won === bid && bid ? 'made' : ''}">${won} of ${bid}</b><span>Score ${s.scores[t]} · Bags ${s.bags[t]}</span>`;
     }
+    // Bid circles: one per trick bid; won ones light up, extras glow; a nil shows a badge
+    function pipsHTML(p) {
+      const bid = s.bids[p], won = s.tricks[p];
+      if (bid === null) return '';
+      const pop = i => i === won - 1 && seatWon[p] !== won ? ' pop' : '';
+      if (bid === 0) return `<div class="sp-pips"><span class="sp-nil${won ? ' bust' : ''}">${won ? 'NIL ✕' : 'NIL'}</span>${Array.from({ length: won }, (_, i) => `<i class="over${pop(i)}"></i>`).join('')}</div>`;
+      let h = '';
+      for (let i = 0; i < Math.max(bid, won); i++) h += `<i class="${i < bid ? (i < won ? 'won' : '') : 'over'}${pop(i)}"></i>`;
+      return `<div class="sp-pips" aria-label="${nm(p)}: ${won} of ${bid}">${h}</div>`;
+    }
+    const seatWon = [0, 0, 0, 0];
     function render() {
       const R = levelRules(s.level);
       stat.innerHTML = pills([{ label: 'Lv', value: s.level, cls: 'lvl' }, { label: 'Goal', value: R.target }, { label: 'Hand', value: s.handNo || 1 }]);
-      $('.sp-them').innerHTML = `<small>THEM</small><b>${s.scores[1]}</b><span>${teamLine(1)}</span>`;
-      $('.sp-us').innerHTML = `<small>US</small><b>${s.scores[0]}</b><span>${teamLine(0)}</span>`;
+      $('.sp-them').innerHTML = scoreBox(1);
+      $('.sp-us').innerHTML = scoreBox(0);
       seats.forEach((e, p) => {
-        const bid = s.bids[p] === null ? (s.phase === 'bid' && s.turn === p ? 'Bidding…' : '') : `${s.bids[p] === 0 ? 'Nil' : 'Bid ' + s.bids[p]} · <b>${s.tricks[p]}</b>`;
+        const bidding = s.bids[p] === null && s.phase === 'bid' && s.turn === p;
         e.classList.toggle('turn', s.turn === p && s.phase !== 'done');
         e.style.setProperty('--c', who[p].color);
         e.innerHTML = `<div class="sp-av" ${p ? 'aria-hidden="true"' : 'role="button" aria-label="Send an emote"'}>${who[p].icon}</div>` +
-          `<div class="sp-tag">${p ? nm(p) + (bid ? ' · ' : '') : ''}${bid || (p ? '' : 'You')}</div>`;
+          `<div class="sp-tag">${p ? nm(p) : 'You'}${bidding ? ' · bidding…' : ''}</div>` + pipsHTML(p);
+        seatWon[p] = s.tricks[p];
       });
       seats[0].querySelector('.sp-av').onclick = emotePicker;
       // opponents' card backs, fanned
