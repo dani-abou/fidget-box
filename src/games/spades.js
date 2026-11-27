@@ -217,7 +217,7 @@ export default {
 .sp-felt{position:absolute;inset:44px 12px -40px;border-radius:70px 70px 0 0;border:4px solid #5C3216;
   background:radial-gradient(ellipse at 50% 40%,#3DB979 0%,#26904F 55%,#17623A 100%);box-shadow:inset 0 0 0 3px rgba(255,255,255,.07),inset 0 10px 40px rgba(0,0,0,.35),0 0 0 3px var(--outline)}
 /* card backs */
-.sp-back{position:absolute;width:40px;height:58px;border-radius:6px;border:2px solid #fff;box-shadow:0 0 0 2px var(--outline),0 2px 4px rgba(0,0,0,.4);
+.sp-back{transition:left .3s cubic-bezier(.2,.8,.3,1),top .3s cubic-bezier(.2,.8,.3,1),right .3s cubic-bezier(.2,.8,.3,1),transform .3s,opacity .25s;position:absolute;width:40px;height:58px;border-radius:6px;border:2px solid #fff;box-shadow:0 0 0 2px var(--outline),0 2px 4px rgba(0,0,0,.4);
   background:radial-gradient(circle,#FFD25A 0 4px,transparent 5px),repeating-linear-gradient(45deg,#6B35D6 0 4px,#5124AE 4px 8px)}
 .sp-fan{position:absolute;pointer-events:none}
 .sp-fan-n{top:-22px;left:50%}
@@ -269,7 +269,10 @@ export default {
 .sp-score.bump b{animation:pulse .3s 2 alternate}
 /* trick */
 .sp-trick{position:absolute;left:50%;top:52%;width:0;height:0;z-index:1}
-.sp-trick .card{position:absolute;transform:translate(-50%,-50%);transition:translate .35s ease-in,opacity .35s ease-in}
+.sp-trick .card{position:absolute;transform:translate(-50%,-50%);transition:translate .35s ease-in,opacity .35s ease-in,filter .25s,box-shadow .25s}
+.sp-trick .card.lose{filter:brightness(.62) saturate(.7)}
+.sp-trick .card.win{box-shadow:0 0 0 3px #FFD25A,0 3px 0 rgba(0,0,0,.35),0 0 18px rgba(255,210,90,.55)}
+.sp-back.gone{opacity:0;transform:scale(.6)!important}
 .sp-trick .t0{transform:translate(-50%,6%)}
 .sp-trick .t1{transform:translate(-140%,-50%) rotate(-7deg)}
 .sp-trick .t2{transform:translate(-50%,-106%) rotate(3deg)}
@@ -294,7 +297,7 @@ export default {
 .card .pip{position:absolute;right:-6%;bottom:-8%;font-size:calc(var(--cw,56px)*.9);line-height:1;opacity:.95}
 /* hand: a fan along an arc */
 .sp-hand{position:relative;height:calc(var(--cw,70px)*1.42 + 26px);flex:none;z-index:4}
-.sp-hand .card{position:absolute;bottom:6px;transform-origin:50% 130%;transition:transform .15s,filter .15s,bottom .15s;touch-action:none}
+.sp-hand .card{position:absolute;bottom:6px;transform-origin:50% 130%;transition:left .28s cubic-bezier(.2,.8,.3,1),transform .28s cubic-bezier(.2,.8,.3,1),opacity .2s,filter .15s,bottom .18s;touch-action:none}
 .sp-hand .card .r{font-size:var(--rk);letter-spacing:0} /* sized to the visible strip so Q, K and 10 aren't covered by the next card */
 .sp-hand .card .s{top:calc(var(--rk) + 3px);font-size:calc(var(--rk) * .8)}
 .card .r.ten{letter-spacing:-.08em;transform:scaleX(.8);transform-origin:left top}
@@ -412,30 +415,39 @@ export default {
       return `<div class="sp-pips" aria-label="${nm(p)}: ${won} of ${bid}">${h}</div>`;
     }
     const seatWon = [0, 0, 0, 0];
+    // Elements are kept between renders and only changed where something moved, so cards slide
+    // instead of being torn down and rebuilt (which restarted every animation and made things jump).
+    const setHTML = (e, h) => { if (e._h !== h) { e._h = h; e.innerHTML = h; } };
+    const seatParts = seats.map((e, p) => {
+      e.innerHTML = `<div class="sp-av" ${p ? 'aria-hidden="true"' : 'role="button" aria-label="Send an emote"'}></div><div class="sp-tag"></div><div class="sp-pipbox"></div>`;
+      return { av: e.querySelector('.sp-av'), tag: e.querySelector('.sp-tag'), pips: e.querySelector('.sp-pipbox') };
+    });
+    seatParts[0].av.onclick = () => emotePicker();
     function render() {
       const R = levelRules(s.level);
-      stat.innerHTML = pills([{ label: 'Lv', value: s.level, cls: 'lvl' }, { label: 'Goal', value: R.target }, { label: 'Hand', value: s.handNo || 1 }]);
-      $('.sp-them').innerHTML = scoreBox(1);
-      $('.sp-us').innerHTML = scoreBox(0);
+      setHTML(stat, pills([{ label: 'Lv', value: s.level, cls: 'lvl' }, { label: 'Goal', value: R.target }, { label: 'Hand', value: s.handNo || 1 }]));
+      setHTML($('.sp-them'), scoreBox(1));
+      setHTML($('.sp-us'), scoreBox(0));
       seats.forEach((e, p) => {
-        const bidding = s.bids[p] === null && s.phase === 'bid' && s.turn === p;
+        const bidding = s.bids[p] === null && s.phase === 'bid' && s.turn === p, part = seatParts[p];
         e.classList.toggle('turn', s.turn === p && s.phase !== 'done');
         e.style.setProperty('--c', who[p].color);
-        e.innerHTML = `<div class="sp-av" ${p ? 'aria-hidden="true"' : 'role="button" aria-label="Send an emote"'}>${who[p].icon}</div>` +
-          `<div class="sp-tag">${p ? nm(p) : 'You'}${bidding ? ' · bidding…' : ''}</div>` + pipsHTML(p);
+        setHTML(part.av, who[p].icon);
+        setHTML(part.tag, `${p ? nm(p) : 'You'}${bidding ? ' · bidding…' : ''}`);
+        setHTML(part.pips, pipsHTML(p));
         seatWon[p] = s.tricks[p];
       });
-      seats[0].querySelector('.sp-av').onclick = emotePicker;
-      // opponents' card backs, fanned
+      // opponents' card backs: re-spaced smoothly; a played card's back fades out
       fans.forEach((f, p) => {
         if (!f) return;
-        const n = s.hands[p].length, horiz = p === 2;
-        let h = '';
-        for (let i = 0; i < n; i++) {
-          const off = (i - (n - 1) / 2);
-          h += `<div class="sp-back" style="${horiz ? `left:${off * 11 - 20}px;top:${Math.abs(off) * .8}px;transform:rotate(${off * 2}deg)` : `top:${off * 9 - 29}px;${p === 1 ? 'left' : 'right'}:${Math.abs(off) * .6}px;transform:rotate(${(p === 1 ? 90 : -90) + off * 1.5}deg)`}"></div>`;
-        }
-        f.innerHTML = h;
+        const n = s.hands[p].length, horiz = p === 2, live = [...f.children].filter(x => !x.classList.contains('gone'));
+        while (live.length > n) { const x = live.pop(); x.classList.add('gone'); later(() => x.remove(), 300); }
+        while (live.length < n) { const x = document.createElement('div'); x.className = 'sp-back'; f.append(x); live.push(x); }
+        live.forEach((x, i) => {
+          const off = i - (n - 1) / 2;
+          if (horiz) { x.style.left = off * 11 - 20 + 'px'; x.style.top = Math.abs(off) * .8 + 'px'; x.style.transform = `rotate(${off * 2}deg)`; }
+          else { x.style.top = off * 9 - 29 + 'px'; x.style[p === 1 ? 'left' : 'right'] = Math.abs(off) * .6 + 'px'; x.style.transform = `rotate(${(p === 1 ? 90 : -90) + off * 1.5}deg)`; }
+        });
       });
       // trick: keep cards already down; new ones fly in from their player
       if (s.turn !== -1) trickEl.className = 'sp-trick';
@@ -453,12 +465,15 @@ export default {
           d.style.translate = `${fr.left + fr.width / 2 - (to.left + to.width / 2)}px ${fr.top + fr.height / 2 - (to.top + to.height / 2)}px`;
           d.style.scale = String(fr.width / to.width);
           void d.offsetWidth;
-          d.style.transition = 'translate .3s cubic-bezier(.2,.8,.3,1), scale .3s cubic-bezier(.2,.8,.3,1)';
+          d.style.transition = 'translate .3s cubic-bezier(.2,.8,.3,1), scale .3s cubic-bezier(.2,.8,.3,1), filter .25s';
           d.style.translate = '0px 0px'; d.style.scale = '1';
           later(() => { d.style.transition = ''; d.style.translate = ''; d.style.scale = ''; }, 320); // hand back to the slide-to-winner animation
           lastFrom = null;
         }
       }
+      // the card currently winning the trick stays bright; the rest dim, so it's easy to follow
+      const best = s.trick.length ? trickWinner(s.trick).c : -1;
+      for (const ch of trickEl.children) { const w = +ch.dataset.c === best; ch.classList.toggle('win', w && s.trick.length > 1); ch.classList.toggle('lose', !w); }
       msg.textContent = s.phase === 'play' && s.turn === 0 ? (s.trick.length ? 'Your turn' : 'Your lead') : '';
       // your hand along an arc
       s.hands[0].sort(cardOrder);
@@ -469,17 +484,27 @@ export default {
       trickEl.style.setProperty('--cw', Math.round(Math.min(66, W / 6.2, table.clientHeight / 5.6)) + 'px');
       const stepX = n > 1 ? Math.min(cw * .62, (W - cw - 30) / (n - 1)) : 0, x0 = (W - (stepX * (n - 1) + cw)) / 2; // 30px spare for the arc's lean
       handEl.style.setProperty('--rk', Math.round(Math.max(16, Math.min(cw * .44, stepX * 1.05 + 1))) + 'px');
-      if (drag) { pendingHand = true; return; } // never rebuild the hand under a finger
-      handEl.innerHTML = '';
+      if (drag) { pendingHand = true; return; } // never move the hand under a finger
+      const have = new Map([...handEl.children].map(b => [+b.dataset.c, b]));
+      for (const [c, b] of have) if (!s.hands[0].includes(c)) b.remove(); // played (its glide to the table is already running)
+      const dealing = s.hands[0].every(c => !have.has(c)) && n > 1;
       s.hands[0].forEach((c, i) => {
-        const b = document.createElement('button'), off = i - (n - 1) / 2;
+        let b = have.get(c);
+        const off = i - (n - 1) / 2, rest = `rotate(${off * 1.3}deg) translateY(${off * off * .55}px)`;
+        if (!b) {
+          b = document.createElement('button'); b.dataset.c = c; b.innerHTML = cardHTML(c); b.setAttribute('aria-label', cardLabel(c));
+          b.style.left = x0 + i * stepX + 'px';
+          if (dealing) { b.style.transition = 'none'; b.style.transform = `translateY(140px) rotate(${off * 4}deg)`; b.style.opacity = '0'; } // a fresh deal fans in
+          handEl.append(b);
+        }
         b.className = `card su${suit(c)}` + (RED(c) ? ' red' : '') + (L.length ? (L.includes(c) ? ' ok' : ' no') : '');
-        b.innerHTML = cardHTML(c); b.setAttribute('aria-label', cardLabel(c));
-        b.style.left = x0 + i * stepX + 'px'; b.style.transform = `rotate(${off * 1.3}deg) translateY(${off * off * .55}px)`; b.style.zIndex = i;
-        b.disabled = !L.includes(c); b.dataset.c = c; b.dataset.rest = b.style.transform;
-        handEl.append(b);
+        b.disabled = !L.includes(c); b.dataset.rest = rest; b.style.zIndex = i;
+        b.style.left = x0 + i * stepX + 'px';
+        if (dealing) { void b.offsetWidth; b.style.transition = ''; b.style.transitionDelay = i * 25 + 'ms'; b.style.opacity = ''; later(() => { b.style.transitionDelay = ''; }, 700); }
+        b.style.transform = rest;
       });
-
+      // keep DOM order = left-to-right, so overlaps stack the right way
+      s.hands[0].forEach(c => { const b = have.get(c) || handEl.querySelector(`[data-c="${c}"]`); handEl.append(b); });
     }
 
     // ---------- your cards: tap, drag onto the table, or flick upward ----------
