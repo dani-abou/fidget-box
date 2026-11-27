@@ -7,9 +7,9 @@ const { chromium } = createRequire(import.meta.url)('playwright');
 import { readFile, mkdir } from 'node:fs/promises';
 
 const svg = await readFile(new URL('./icon.svg', import.meta.url), 'utf8');
-const art = svg.match(/<g id="art">[\s\S]*?<\/g>/)[0];
+const art = svg.match(/<!--art-->([\s\S]*?)<!--\/art-->/)[1]; // everything between the markers (groups can nest)
 const defs = svg.match(/<defs>[\s\S]*?<\/defs>/)[0];
-const BG = '#2A1D58';
+const BG = '#05050A'; // near-black
 
 // scale: how much of the canvas the artwork uses. Maskable icons must keep
 // everything inside the central 80% circle, so the art is shrunk for them.
