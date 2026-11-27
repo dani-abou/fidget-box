@@ -123,7 +123,7 @@ header{display:flex;align-items:center;gap:10px;padding:10px 14px 8px;min-height
 .pbody{overflow:auto;overscroll-behavior:contain;color:var(--muted);font-size:16px;line-height:1.4;padding:2px}
 .pbody p{margin:0 0 10px}
 .pbody b{color:var(--ink)}
-.big{display:flex;justify-content:center;gap:6px;margin:0 0 12px;font-size:54px;line-height:1}
+.big{display:flex;justify-content:center;align-items:flex-end;gap:6px;margin:0 0 12px;padding-top:16px;font-size:54px;line-height:1.1}
 .big span{color:#5A4C99;text-shadow:0 4px 0 var(--outline)}
 .big span.on{color:var(--butter);animation:starpop .5s cubic-bezier(.3,1.8,.5,1) backwards;animation-delay:calc(.25s + var(--i)*.28s)}
 .big span:nth-child(2){transform:translateY(-10px);font-size:64px}

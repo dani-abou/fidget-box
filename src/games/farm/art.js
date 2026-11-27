@@ -2,7 +2,7 @@
 // crops) are rendered once into small canvases and reused, and the static
 // ground (grass, paths, soil, fences) is rendered once into one big canvas,
 // so a busy frame is mostly cheap drawImage calls.
-import { CONFIG } from './config.js';
+import { CONFIG, SEASONS } from './config.js';
 
 export const INK = '#2B1D3A';
 const OUT = INK;
@@ -92,34 +92,36 @@ export function createArt(T, dpr) {
   });
 
   // ---------- the static ground, rendered once per unlock change ----------
-  function ground(isOn) {
+  function ground(isOn, lay = {}) {
     const { cols, rows } = CONFIG.world;
+    const LC = lay.C || CONFIG, th = lay.theme || SEASONS.spring;
     const c = document.createElement('canvas'); c.width = Math.round(cols * T * dpr); c.height = Math.round(rows * T * dpr);
     const g = c.getContext('2d'); g.scale(dpr, dpr);
     const lw = Math.max(1.5, T * .05);
     // grass with soft variation and little flowers
-    g.fillStyle = '#86CF62'; g.fillRect(0, 0, cols * T, rows * T);
+    g.fillStyle = th.grass[0]; g.fillRect(0, 0, cols * T, rows * T);
     for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
       const h = hash(x, y);
-      if (h < .5) { g.fillStyle = h < .25 ? '#7EC65A' : '#8ED66B'; g.fillRect(x * T, y * T, T, T); }
-      if (h > .9) { g.fillStyle = h > .95 ? '#FFF3A6' : '#FFFFFF'; g.beginPath(); g.arc((x + hash(y, x)) * T, (y + h) * T, T * .05, 0, 7); g.fill(); }
-      if (h > .82 && h < .86) { g.strokeStyle = '#5FAE45'; g.lineWidth = lw * .7; g.beginPath(); const gx = (x + .3) * T, gy = (y + .6) * T; g.moveTo(gx, gy); g.lineTo(gx - T * .05, gy - T * .14); g.moveTo(gx, gy); g.lineTo(gx + T * .06, gy - T * .12); g.stroke(); }
+      if (h < .5) { g.fillStyle = h < .25 ? th.grass[1] : th.grass[2]; g.fillRect(x * T, y * T, T, T); }
+      if (h > .9) { g.fillStyle = h > .95 ? th.flowers[1] : th.flowers[0]; g.beginPath(); g.arc((x + hash(y, x)) * T, (y + h) * T, T * .05, 0, 7); g.fill(); }
+      if (h > .82 && h < .86) { g.strokeStyle = th.tuft; g.lineWidth = lw * .7; g.beginPath(); const gx = (x + .3) * T, gy = (y + .6) * T; g.moveTo(gx, gy); g.lineTo(gx - T * .05, gy - T * .14); g.moveTo(gx, gy); g.lineTo(gx + T * .06, gy - T * .12); g.stroke(); }
     }
     // dirt path up the middle, plaza, road
-    g.fillStyle = '#E9D29A'; rr(g, 6 * T, 1 * T, 2 * T, 35 * T, T * .5); g.fill();
+    g.fillStyle = th.path; rr(g, 6 * T, 1 * T, 2 * T, 35 * T, T * .5); g.fill();
+    decorate(g, lay, th, lw);
     g.fillStyle = '#EAD9B8'; rr(g, .3 * T, 34.6 * T, 13.4 * T, 8.6 * T, T * .5); g.fill();
     g.strokeStyle = 'rgba(160,130,90,.18)'; g.lineWidth = 1;
     for (let y = 35; y < 43; y++) for (let x = 1; x < 14; x++) if ((x + y) % 2) g.strokeRect(x * T, y * T, T, T);
     g.fillStyle = '#7A7598'; g.fillRect(0, 43.6 * T, cols * T, 3.4 * T);
     g.fillStyle = '#FFE58A'; for (let x = 0; x < cols; x += 2) g.fillRect((x + .4) * T, 45.2 * T, T * 1.1, T * .14);
     // fields
-    for (const f of CONFIG.fields) {
+    for (const f of LC.fields) {
       if (!isOn(f.id)) continue;
       rr(g, (f.x - .1) * T, (f.y - .1) * T, (f.w + .2) * T, (f.h + .2) * T, T * .25); blob(g, '#9C6A43', lw);
       for (let y = 0; y < f.h; y++) for (let x = 0; x < f.w; x++) { rr(g, (f.x + x + .08) * T, (f.y + y + .08) * T, T * .84, T * .84, T * .18); g.fillStyle = (x + y) % 2 ? '#8A5A36' : '#7E5131'; g.fill(); }
     }
     // pens: straw floor and a wooden fence
-    for (const p of CONFIG.pens) {
+    for (const p of LC.pens) {
       if (!isOn(p.id)) continue;
       rr(g, p.x * T, p.y * T, p.w * T, p.h * T, T * .3); blob(g, '#EBD27E', lw);
       g.strokeStyle = 'rgba(190,150,60,.5)'; g.lineWidth = lw * .6;
@@ -136,7 +138,7 @@ export function createArt(T, dpr) {
       g.fillText('🔒 ' + z.name, 7 * T, (bottom - 2.2) * T);
     }
     // trees along the edges
-    for (let y = 2; y < 43; y += 2.6) for (const x of [-.2, 14.2]) tree(g, x, y + hash(x, y) * 1.2, lw, T);
+    for (let y = 2; y < 43; y += 2.6) for (const x of [-.2, 14.2]) tree(g, x, y + hash(x, y) * 1.2, lw, th.leaves[Math.floor(hash(y, x) * th.leaves.length)], th.snow);
     return c;
   }
   function fenceRect(g, x, y, w, h, lw) {
@@ -152,12 +154,88 @@ export function createArt(T, dpr) {
     rr(g, x0 * T, (y + .08) * T, len * T, T * .14, T * .05); g.fill(); g.stroke();
     for (let i = x0 + .25; i < x0 + len; i += .7) { rr(g, (i - .08) * T, (y - .3) * T, T * .16, T * .55, T * .06); g.fill(); g.stroke(); }
   }
-  function tree(g, x, y, lw) {
+  function tree(g, x, y, lw, leaf = '#4FAE4A', snow = false) {
     g.fillStyle = 'rgba(0,0,0,.15)'; g.beginPath(); g.ellipse(x * T, (y + .5) * T, T * .55, T * .2, 0, 0, 7); g.fill();
     rr(g, (x - .1) * T, (y + .05) * T, T * .2, T * .45, T * .05); blob(g, '#8A5A36', lw);
-    g.beginPath(); g.arc(x * T, (y - .2) * T, T * .55, 0, 7); blob(g, '#4FAE4A', lw);
+    if (snow) { // a snowy pine
+      for (const [w, top, bot] of [[.6, -.35, .15], [.45, -.75, -.25]]) { g.beginPath(); g.moveTo((x - w) * T, (y + bot) * T); g.lineTo(x * T, (y + top - .3) * T); g.lineTo((x + w) * T, (y + bot) * T); g.closePath(); blob(g, leaf, lw); }
+      g.fillStyle = '#FFFFFF'; g.beginPath(); g.moveTo((x - .2) * T, (y - .78) * T); g.lineTo(x * T, (y - 1.05) * T); g.lineTo((x + .2) * T, (y - .78) * T); g.closePath(); g.fill();
+      return;
+    }
+    g.beginPath(); g.arc(x * T, (y - .2) * T, T * .55, 0, 7); blob(g, leaf, lw);
     g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.arc((x - .18) * T, (y - .4) * T, T * .2, 0, 7); g.fill();
   }
+  // ---------- decorations on free ground: purely visual, nothing collides with them ----------
+  function decorate(g, lay, th, lw) {
+    if (!lay.spots) return;
+    const seed = lay.decor || 0;
+    lay.spots.forEach((sp, i) => {
+      const h = hash(i + seed * 7.3, seed + i * 1.7);
+      if (h < .3) return; // leave some ground bare
+      let kind = th.decor[Math.floor(hash(seed, i) * th.decor.length)];
+      if (sp.small && (kind === 'pond' || kind === 'ice')) kind = 'rocks';
+      DECOR[kind]?.(g, sp.x * T, sp.y * T, lw, h, th);
+    });
+  }
+  const DECOR = {
+    pond(g, x, y, lw) {
+      g.beginPath(); g.ellipse(x, y, T * 1.05, T * .55, 0, 0, 7); blob(g, '#6FC3E8', lw);
+      g.fillStyle = 'rgba(255,255,255,.45)'; g.beginPath(); g.ellipse(x - T * .3, y - T * .15, T * .35, T * .1, -.2, 0, 7); g.fill();
+      g.beginPath(); g.ellipse(x + T * .45, y + T * .15, T * .2, T * .12, 0, 0, 7); blob(g, '#5DB548', lw * .6);
+      for (const a of [-1, 1]) { g.strokeStyle = '#4E9A3A'; g.lineWidth = lw * .8; g.beginPath(); g.moveTo(x + a * T * 1, y + T * .2); g.lineTo(x + a * T * 1.1, y - T * .35); g.stroke(); }
+    },
+    ice(g, x, y, lw) {
+      g.beginPath(); g.ellipse(x, y, T * 1, T * .5, 0, 0, 7); blob(g, '#BFE4F5', lw);
+      g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = lw * .6; g.beginPath(); g.moveTo(x - T * .5, y - T * .1); g.lineTo(x - T * .1, y + T * .05); g.lineTo(x + T * .3, y - T * .15); g.stroke();
+    },
+    rocks(g, x, y, lw, h) {
+      for (const [dx, dy, r] of [[-.25, .05, .28], [.2, .12, .2], [.05, -.15, .16]]) { g.beginPath(); g.ellipse(x + dx * T, y + dy * T, r * T * (1 + h * .3), r * T * .75, 0, 0, 7); blob(g, '#A9A3B8', lw * .8); }
+      g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.arc(x - .3 * T, y - .05 * T, T * .07, 0, 7); g.fill();
+    },
+    flowers(g, x, y, lw, h, th) {
+      const cols = ['#FF6F91', '#FFD24A', '#B58CFF', '#FFFFFF'];
+      for (let k = 0; k < 7; k++) {
+        const fx = x + (hash(k, h) - .5) * T * 1.4, fy = y + (hash(h, k) - .5) * T * .9;
+        g.strokeStyle = th.tuft; g.lineWidth = lw * .6; g.beginPath(); g.moveTo(fx, fy); g.lineTo(fx, fy + T * .18); g.stroke();
+        g.fillStyle = cols[k % cols.length]; for (let a = 0; a < 5; a++) { g.beginPath(); g.arc(fx + Math.cos(a * 1.26) * T * .07, fy + Math.sin(a * 1.26) * T * .07, T * .055, 0, 7); g.fill(); }
+        g.fillStyle = '#FFB020'; g.beginPath(); g.arc(fx, fy, T * .04, 0, 7); g.fill();
+      }
+    },
+    bush(g, x, y, lw, h, th) {
+      g.fillStyle = 'rgba(0,0,0,.13)'; g.beginPath(); g.ellipse(x, y + T * .3, T * .6, T * .16, 0, 0, 7); g.fill();
+      for (const [dx, dy, r] of [[-.3, .05, .3], [.3, .05, .3], [0, -.12, .36]]) { g.beginPath(); g.arc(x + dx * T, y + dy * T, r * T, 0, 7); blob(g, th.snow ? '#4F8F6E' : th.tuft, lw * .8); }
+      if (th.snow) { g.fillStyle = '#FFFFFF'; g.beginPath(); g.ellipse(x, y - T * .38, T * .3, T * .1, 0, 0, 7); g.fill(); }
+      else if (h > .6) { g.fillStyle = '#E5484D'; for (const [dx, dy] of [[-.25, -.05], [.15, -.2], [.3, .1]]) { g.beginPath(); g.arc(x + dx * T, y + dy * T, T * .05, 0, 7); g.fill(); } }
+    },
+    hay(g, x, y, lw) { // two square bales, one stacked: nothing round, so they never read as coins
+      g.fillStyle = 'rgba(0,0,0,.13)'; g.beginPath(); g.ellipse(x, y + T * .32, T * .75, T * .15, 0, 0, 7); g.fill();
+      for (const [dx, dy] of [[-.62, -.1], [.02, -.1], [-.3, -.48]]) {
+        rr(g, x + dx * T, y + dy * T, T * .6, T * .4, T * .06); blob(g, '#E0B654', lw * .8);
+        g.strokeStyle = '#A97C2C'; g.lineWidth = lw * .6;
+        for (const f of [.2, .4]) { g.beginPath(); g.moveTo(x + (dx + .05) * T, y + (dy + f) * T); g.lineTo(x + (dx + .55) * T, y + (dy + f) * T); g.stroke(); }
+        g.strokeStyle = '#8A5A36'; g.beginPath(); g.moveTo(x + (dx + .3) * T, y + dy * T); g.lineTo(x + (dx + .3) * T, y + (dy + .4) * T); g.stroke();
+      }
+    },
+    leaves(g, x, y, lw, h) {
+      const cols = ['#E58A2E', '#D9542F', '#F0B43A', '#B5532A'];
+      for (let k = 0; k < 14; k++) { g.fillStyle = cols[k % 4]; g.beginPath(); g.ellipse(x + (hash(k, h) - .5) * T * 1.6, y + (hash(h, k + 3) - .5) * T, T * .09, T * .05, k, 0, 7); g.fill(); }
+    },
+    mushrooms(g, x, y, lw) {
+      for (const [dx, dy, s] of [[-.2, .1, 1], [.18, -.05, .8], [.35, .2, .6]]) {
+        rr(g, x + (dx - .05 * s) * T, y + dy * T, T * .1 * s, T * .18 * s, T * .03); blob(g, '#FFF3E0', lw * .6);
+        g.beginPath(); g.ellipse(x + dx * T, y + dy * T, T * .16 * s, T * .1 * s, 0, Math.PI, 0); g.closePath(); blob(g, '#E5484D', lw * .6);
+        g.fillStyle = '#FFFFFF'; g.beginPath(); g.arc(x + (dx - .05) * T, y + (dy - .05) * T, T * .025, 0, 7); g.fill();
+      }
+    },
+    snowman(g, x, y, lw) {
+      g.fillStyle = 'rgba(0,0,0,.12)'; g.beginPath(); g.ellipse(x, y + T * .32, T * .4, T * .12, 0, 0, 7); g.fill();
+      g.beginPath(); g.arc(x, y + T * .08, T * .3, 0, 7); blob(g, '#FFFFFF', lw * .8);
+      g.beginPath(); g.arc(x, y - T * .34, T * .21, 0, 7); blob(g, '#FFFFFF', lw * .8);
+      g.fillStyle = '#2B2340'; for (const dx of [-.07, .07]) { g.beginPath(); g.arc(x + dx * T, y - T * .38, T * .03, 0, 7); g.fill(); }
+      g.fillStyle = '#FF8A3D'; g.beginPath(); g.moveTo(x, y - T * .33); g.lineTo(x + T * .16, y - T * .3); g.lineTo(x, y - T * .28); g.fill();
+      g.fillStyle = '#E5484D'; g.fillRect(x - T * .2, y - T * .18, T * .4, T * .07);
+    },
+  };
 
   // ---------- characters ----------
   // sx/sy: squash & stretch. look: -1/1 facing. kind sets the outfit.

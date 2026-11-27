@@ -228,3 +228,42 @@ export const META = {
     scarecrow: { label: 'Scarecrow',      icon: '🧑‍🌾', levels: [0, .5, 1],          cost: [6, 18],         unit: 'tiles more crow-scaring reach' },
   },
 };
+
+// ---- layout variety: each level dresses the same farm differently ----
+// season: ground and tree palette; mirror: the fields and pens swap sides above the market
+// (the market, path and machines stay put); decor: seed for ponds, rocks, flowers and hay on free ground.
+export const SEASONS = {
+  spring: { grass: ['#86CF62', '#7EC65A', '#8ED66B'], tuft: '#5FAE45', flowers: ['#FFFFFF', '#FFF3A6'], path: '#E9D29A', leaves: ['#4FAE4A'], decor: ['flowers', 'rocks', 'pond', 'bush'] },
+  summer: { grass: ['#7CC85A', '#73BF51', '#86D163'], tuft: '#54A33C', flowers: ['#FF8FB1', '#FFD24A'], path: '#EDD497', leaves: ['#3E9E3F', '#48A846'], decor: ['flowers', 'pond', 'hay', 'bush'] },
+  autumn: { grass: ['#B7C665', '#ABBA5A', '#C2CF70'], tuft: '#8C9A3E', flowers: ['#FF9A3C', '#E2553A'], path: '#E3C48C', leaves: ['#E58A2E', '#D9542F', '#F0B43A'], decor: ['hay', 'leaves', 'rocks', 'mushrooms'] },
+  winter: { grass: ['#E4EDF2', '#D9E4EB', '#EEF4F8'], tuft: '#B3C6D2', flowers: ['#FFFFFF', '#CFE3F0'], path: '#D8D0C2', leaves: ['#3F8A6A'], snow: true, decor: ['snowman', 'rocks', 'ice', 'bush'] },
+};
+// free ground big enough for a pond (x, y = centre)
+export const DECOR_SPOTS = [
+  { x: 2.4, y: 33.9, small: true }, { x: 11.6, y: 33.9, small: true }, { x: 2.5, y: 26.4 }, { x: 11.5, y: 26.4 },
+  { x: 2.3, y: 22.6 }, { x: 11.6, y: 22.6 }, { x: 2.5, y: 15.3 }, { x: 11.5, y: 15.3 }, { x: 2.2, y: 11.8 },
+  { x: 11.6, y: 11.6 }, { x: 11.5, y: 3.4 }, { x: 5.3, y: 26.6, small: true }, { x: 8.7, y: 26.6, small: true },
+  { x: 5.4, y: 15.2, small: true }, { x: 8.6, y: 15.2, small: true }, { x: 8.7, y: 3.2, small: true },
+];
+const SEASON_ORDER = ['spring', 'summer', 'autumn', 'winter'];
+// levels 1-4 spring, 5-8 summer, 9-12 autumn, 13-15 winter; every other level mirrored (level 1 stays the classic farm)
+LEVELS.forEach((L, i) => { L.layout ??= { season: SEASON_ORDER[Math.min(3, Math.floor(i / 4))], mirror: i % 2 === 1, decor: i + 1 }; });
+// Free Farm follows the calendar
+FREE.layout = { season: SEASON_ORDER[Math.floor(((new Date().getMonth() + 10) % 12) / 3)], mirror: false, decor: 99 };
+
+const FARM_BOTTOM = 34.5; // the market and road below this never move
+export function layoutFor(L) {
+  const lay = L.layout || { season: 'spring', mirror: false, decor: 0 };
+  const W = CONFIG.world.cols, mx = lay.mirror ? x => W - x : x => x;
+  const pt = p => (p && p.y < FARM_BOTTOM ? { ...p, x: +mx(p.x).toFixed(2) } : p);
+  const rect = r => (lay.mirror ? { ...r, x: W - r.x - r.w } : { ...r });
+  const C = {
+    ...CONFIG,
+    fields: CONFIG.fields.map(rect),
+    pens: CONFIG.pens.map(p => ({ ...rect(p), pile: pt(p.pile) })),
+    machines: CONFIG.machines.map(m => ({ ...m, x: mx(m.x), dir: lay.mirror ? -1 : 1 })),
+    helpers: CONFIG.helpers.map(h => ({ ...h, crate: pt(h.crate) })),
+  };
+  const spots = DECOR_SPOTS.map(pt);
+  return { C, unlocks: UNLOCKS.map(u => ({ ...u, at: pt(u.at) })), theme: SEASONS[lay.season] || SEASONS.spring, season: lay.season, decor: lay.decor, spots };
+}

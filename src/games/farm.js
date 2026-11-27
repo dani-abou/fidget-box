@@ -8,7 +8,7 @@ import { ac, buzz, click, tone } from '../lib/sound.js';
 import { progress, loadSave, writeSave } from '../lib/progress.js';
 import { panel, levelPicker, starsHTML, pills } from '../lib/ui.js';
 import { confetti } from '../lib/fx.js';
-import { CONFIG as C, UNLOCKS, SHOWN_UNLOCKS, LOOKAHEAD, UNLOCK_SECONDS, UNLOCK_DWELL, TUTORIAL, LEVELS, STAR_TIME_LEFT, FREE, META } from './farm/config.js';
+import { CONFIG as C, UNLOCKS, layoutFor, SHOWN_UNLOCKS, LOOKAHEAD, UNLOCK_SECONDS, UNLOCK_DWELL, TUTORIAL, LEVELS, STAR_TIME_LEFT, FREE, META } from './farm/config.js';
 import { createArt, rr, INK } from './farm/art.js';
 
 const START_IDS = new Set([...C.fields, ...C.stands, ...C.zones].filter(e => e.start).map(e => e.id));
@@ -173,6 +173,8 @@ export function runLevel(el, n, api, mode = 'levels') {
   // ================= state =================
   // levels start fresh from their config; the Free Farm restores its save
   const L = free ? FREE : LEVELS[n - 1], sv = free ? (loadSave('farm-free') || {}) : {};
+  // this level's dressing: mirrored farm, season and decorations (shadows the module's CONFIG and UNLOCKS)
+  const LAY = layoutFor(L), C = LAY.C, UNLOCKS = LAY.unlocks;
   if (!free) api.prog.play(n);
   const S = {
     coins: sv.coins ?? L.coins, unlocked: new Set(sv.unlocked || L.start), partial: sv.partial || {}, up: sv.up || {},
@@ -210,7 +212,7 @@ export function runLevel(el, n, api, mode = 'levels') {
   const pens = C.pens.map(p => ({ ...p, n: sv.piles?.[p.id] ?? 0, timer: 0,
     animals: Array.from({ length: p.animals }, (_, i) => ({ x: p.x + .6 + Math.random() * (p.w - 1.2), y: p.y + .8 + Math.random() * (p.h - 1), tx: 0, ty: 0, look: 1, t: i })) }));
   const machines = C.machines.map(m => ({ ...m, inN: sv.machines?.[m.id]?.in ?? 0, outN: sv.machines?.[m.id]?.out ?? 0, prog: 0,
-    inAt: { x: m.x - 1.3, y: m.y + .75 }, outAt: { x: m.x + 1.3, y: m.y + .75 } }));
+    inAt: { x: m.x - 1.3 * m.dir, y: m.y + .75 }, outAt: { x: m.x + 1.3 * m.dir, y: m.y + .75 } }));
   const stands = C.stands.map(s => ({ ...s, stock: sv.stands?.[s.product] ?? 0, at: { x: s.x, y: C.standY + .75 }, spot: { x: s.x, y: C.standY + 1.55 } }));
   const crates = C.helpers.filter(h => h.kind === 'farmhand').map(h => ({ id: h.id, at: h.crate, n: sv.crates?.[h.id] ?? 0,
     crop: C.fields.find(f => f.id === h.fields[0]).crop }));
@@ -265,7 +267,7 @@ export function runLevel(el, n, api, mode = 'levels') {
     S.unlocked.add(u.id); delete S.partial[u.id]; S.built++; frameNo++;
     const z = C.zones.find(zz => zz.id === u.id), h = C.helpers.find(hh => hh.id === u.id);
     if (h) spawnHelper(h);
-    groundCv = art.ground(on);
+    groundCv = art.ground(on, LAY);
     const big = !!z || u.price >= 300;
     sChime(big); buzz(big ? 60 : 25); shake = big ? .35 : .15;
     burst(u.at.x, u.at.y, '#FFD23F', 12);
@@ -303,11 +305,24 @@ export function runLevel(el, n, api, mode = 'levels') {
     if (!mx && !my && Math.hypot(P.ix, P.iy) < .1) P.ix = P.iy = 0;
     mx = P.ix; my = P.iy;
     const m = Math.hypot(mx, my), sp = up(S, 'speed');
-    let vx = 0, vy = 0;
     // dead zone, then a quick ramp: half a thumb's travel is already full speed, so small wobbles don't change speed
-    if (m > .1) { const k = Math.min(1, (m - .1) / .4) / m * sp; vx = mx * k; vy = my * k; if (Math.abs(mx) > .15) P.look = Math.sign(mx); }
-    const resp = vx || vy ? 22 : 26; // full speed in about a tenth of a second; stops crisply
-    P.vx += (vx - P.vx) * Math.min(1, dt * resp); P.vy += (vy - P.vy) * Math.min(1, dt * resp);
+    let want = m > .1 ? Math.min(1, (m - .1) / .4) * sp : 0;
+    P.spd ??= 0; P.hd ??= 0;
+    if (want) {
+      const aim = Math.atan2(my, mx);
+      if (P.spd < .25 * sp) P.hd = aim; // from a standstill you face where you push
+      else {
+        // otherwise the heading swings round at a capped rate (a U-turn takes about 0.4s) and
+        // sharp turns shed speed, so reversing arcs through a slowdown instead of snapping about
+        let diff = aim - P.hd; diff -= Math.round(diff / (2 * Math.PI)) * 2 * Math.PI;
+        const turn = 8 * dt; P.hd += Math.max(-turn, Math.min(turn, diff));
+        want *= .45 + .55 * Math.max(0, Math.cos(diff));
+      }
+    }
+    P.spd += (want - P.spd) * Math.min(1, dt * (want > P.spd ? 12 : 16)); // full speed in ~.2s; stops crisply
+    if (P.spd < .02) P.spd = 0;
+    P.vx = Math.cos(P.hd) * P.spd; P.vy = Math.sin(P.hd) * P.spd;
+    if (Math.abs(P.vx) > .35 * sp) P.look = Math.sign(P.vx); // only face the other way once actually moving that way
     P.x = Math.max(.45, Math.min(C.world.cols - .45, P.x + P.vx * dt));
     P.y = Math.max(topLimit(), Math.min(43.3, P.y + P.vy * dt));
     P.walk += Math.hypot(P.vx, P.vy) * dt;
@@ -1027,7 +1042,7 @@ export function runLevel(el, n, api, mode = 'levels') {
     const cr = coinEl.querySelector('i').getBoundingClientRect(), r0 = root.getBoundingClientRect();
     coinTarget = { x: cr.left - r0.left + cr.width / 2, y: cr.top - r0.top + cr.height / 2 };
     const nt = Math.round(Math.max(32, Math.min(58, W / 9.5)));
-    if (nt !== T || !art) { T = nt; art = createArt(T, dpr); groundCv = art.ground(on); }
+    if (nt !== T || !art) { T = nt; art = createArt(T, dpr); groundCv = art.ground(on, LAY); }
   }
 
   function offlineEarnings(seconds) {
