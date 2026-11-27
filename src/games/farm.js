@@ -18,11 +18,12 @@ const easeBack = t => { t = Math.min(1, t); const c = 1.7; return 1 + (c + 1) * 
 const up = (state, key) => C.upgrades[key].levels[state.up[key] || 0];
 const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? (n / 1e3).toFixed(1) + 'k' : String(Math.floor(n));
 
+export const COIN = '<svg class="coin" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.6" fill="#FFC93C" stroke="#2B1D3A" stroke-width="2"/><circle cx="10" cy="10" r="5" fill="none" stroke="#E09A10" stroke-width="1.6"/><ellipse cx="7.6" cy="6.8" rx="1.4" ry="2.2" fill="#fff" opacity=".7" transform="rotate(-35 7.6 6.8)"/></svg>';
 const ICON = { carrot: '🥕', corn: '🌽', egg: '🥚', bread: '🍞', pumpkin: '🎃', cheese: '🧀', wool: '🧶' };
 const mmss = t => { t = Math.max(0, Math.ceil(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 /** Text for a level goal, e.g. "Sell 5 🍞". Exported for tests. */
 export const goalText = gl =>
-  gl.earn ? `Earn 🪙${fmt(gl.earn)}` : gl.sell ? `Sell ${gl.n} ${ICON[gl.sell]}` : gl.serve ? `Serve ${gl.serve} customers` :
+  gl.earn ? `Earn ${COIN}${fmt(gl.earn)}` : gl.sell ? `Sell ${gl.n} ${ICON[gl.sell]}` : gl.serve ? `Serve ${gl.serve} customers` :
   gl.fill ? `Fill the festival cart: ${Object.entries(gl.fill).map(([p, k]) => `${k} ${ICON[p]}`).join(' ')}` :
   gl.orders ? `Fill ${gl.orders} special orders${gl.with ? ` with ${ICON[gl.with]}` : ''}` :
   gl.crows !== undefined ? `Shoo the crows: lose no more than ${gl.crows} crops` :
@@ -112,10 +113,11 @@ export default {
 .fm-hud{position:absolute;left:0;right:0;top:0;padding:8px 10px;display:flex;align-items:flex-start;gap:8px;pointer-events:none;z-index:2}
 .fm-coins{display:flex;align-items:center;gap:6px;height:40px;padding:0 14px 0 6px;border-radius:999px;background:#FFF7DD;color:${INK};border:3px solid var(--outline);
   box-shadow:0 4px 0 var(--outline);font-weight:600;font-size:22px;min-width:86px}
-.fm-coins i{font-style:normal;font-size:24px;line-height:1}
+.fm-coins i{font-style:normal;font-size:24px;line-height:1;display:flex}
+.coin{width:1em;height:1em;vertical-align:-.14em;display:inline-block}
 .fm-coins.bump{animation:fmbump .18s}
 @keyframes fmbump{50%{transform:scale(1.12)}}
-.fm-quest{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;min-height:40px;padding:4px 12px;border-radius:16px;background:rgba(43,29,58,.82);color:#fff;font-size:14px;font-weight:600;line-height:1.2}
+.fm-quest{pointer-events:auto;cursor:pointer;flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;min-height:40px;padding:4px 12px;border-radius:16px;background:rgba(43,29,58,.82);color:#fff;font-size:14px;font-weight:600;line-height:1.2}
 .fm-quest b{color:#FFD23F;font-weight:600;white-space:nowrap}
 .fm-quest .bar{display:block;height:5px;border-radius:3px;background:rgba(255,255,255,.2);margin-top:3px;overflow:hidden}
 .fm-quest .bar i{display:block;height:100%;background:#FFD23F;border-radius:3px;transition:width .2s}
@@ -135,6 +137,12 @@ export default {
 .fm-up .btn{padding:6px 12px;font-size:15px;min-width:84px}
 .panel.mega h2{--ribbon:linear-gradient(90deg,#2FE6FF,#AE8CFF,#FF6FAE)}
 .fm-shopbtn{display:block;width:100%;margin-top:10px;--b:#5B3FB8}
+.fm-goal{background:rgba(0,0,0,.18);border-radius:14px;padding:8px 10px;margin-bottom:8px;color:var(--ink)}
+.fm-goal p{margin:0 0 4px;display:flex;justify-content:space-between;gap:8px}
+.fm-goal p span{color:var(--butter);white-space:nowrap;font-weight:600}
+.fm-goal .bar{display:block;height:6px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden;margin:2px 0 6px}
+.fm-goal .bar i{display:block;height:100%;background:var(--butter)}
+.fm-goal small{color:var(--muted);font-size:13px;line-height:1.3;display:block}
 .fm-lv{display:inline-flex;gap:3px;margin-left:4px;vertical-align:middle}
 .fm-lv i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2)} .fm-lv i.on{background:#FFD23F}`,
 
@@ -156,7 +164,7 @@ export default {
 export function runLevel(el, n, api, mode = 'levels') {
   const free = mode === 'free';
   el.innerHTML = `<div class="fm"><canvas></canvas>
-    <div class="fm-hud"><div class="fm-coins"><i>🪙</i><b>0</b></div><div class="fm-quest" aria-live="polite"></div><button class="fm-time" aria-label="Pause">⏸ <span>0:00</span></button></div><div class="fm-bag fm-coins">🧺 0/8</div>
+    <div class="fm-hud"><div class="fm-coins"><i>${COIN}</i><b>0</b></div><div class="fm-quest" aria-live="polite"></div><button class="fm-time" aria-label="Pause">⏸ <span>0:00</span></button></div><div class="fm-bag fm-coins">🧺 0/8</div>
     <div class="fm-joy"><i></i></div><div class="fm-sheet" hidden></div></div>`;
   const root = el.querySelector('.fm'), cv = root.querySelector('canvas'), g = cv.getContext('2d');
   const coinEl = root.querySelector('.fm-hud .fm-coins'), coinTxt = coinEl.querySelector('b'), questEl = root.querySelector('.fm-quest'), bagEl = root.querySelector('.fm-bag'), timeEl = root.querySelector('.fm-time'), timeTxt = timeEl.querySelector('span');
@@ -254,7 +262,7 @@ export function runLevel(el, n, api, mode = 'levels') {
   // minus any whose zone is closed or whose `after` isn't built yet.
   const visibleTiles = () => TILES.filter(u => buildable.has(u.id) && !S.unlocked.has(u.id)).slice(0, SHOWN_UNLOCKS + LOOKAHEAD).filter(u => zoneOpen(zoneOfTile(u)) && (!u.after || on(u.after))).slice(0, SHOWN_UNLOCKS);
   function unlock(u) {
-    S.unlocked.add(u.id); delete S.partial[u.id]; S.built++;
+    S.unlocked.add(u.id); delete S.partial[u.id]; S.built++; frameNo++;
     const z = C.zones.find(zz => zz.id === u.id), h = C.helpers.find(hh => hh.id === u.id);
     if (h) spawnHelper(h);
     groundCv = art.ground(on);
@@ -290,11 +298,15 @@ export function runLevel(el, n, api, mode = 'levels') {
     let mx = joy.dx, my = joy.dy;
     if (keys.has('arrowleft') || keys.has('a')) mx -= 1; if (keys.has('arrowright') || keys.has('d')) mx += 1;
     if (keys.has('arrowup') || keys.has('w')) my -= 1; if (keys.has('arrowdown') || keys.has('s')) my += 1;
+    // smooth the stick itself: finger tremor no longer wobbles your heading
+    P.ix = (P.ix || 0) + (mx - (P.ix || 0)) * Math.min(1, dt * 25); P.iy = (P.iy || 0) + (my - (P.iy || 0)) * Math.min(1, dt * 25);
+    if (!mx && !my && Math.hypot(P.ix, P.iy) < .1) P.ix = P.iy = 0;
+    mx = P.ix; my = P.iy;
     const m = Math.hypot(mx, my), sp = up(S, 'speed');
     let vx = 0, vy = 0;
     // dead zone, then a quick ramp: half a thumb's travel is already full speed, so small wobbles don't change speed
     if (m > .1) { const k = Math.min(1, (m - .1) / .4) / m * sp; vx = mx * k; vy = my * k; if (Math.abs(mx) > .15) P.look = Math.sign(mx); }
-    const resp = vx || vy ? 18 : 24; // speeds up fast, stops a little faster
+    const resp = vx || vy ? 22 : 26; // full speed in about a tenth of a second; stops crisply
     P.vx += (vx - P.vx) * Math.min(1, dt * resp); P.vy += (vy - P.vy) * Math.min(1, dt * resp);
     P.x = Math.max(.45, Math.min(C.world.cols - .45, P.x + P.vx * dt));
     P.y = Math.max(topLimit(), Math.min(43.3, P.y + P.vy * dt));
@@ -308,12 +320,17 @@ export function runLevel(el, n, api, mode = 'levels') {
     ch.look = Math.sign(to.x - ch.x) || ch.look; ch.x += (to.x - ch.x) / d * step; ch.y += (to.y - ch.y) / d * step; ch.walk = (ch.walk || 0) + step;
     return step >= d - 1e-6;
   }
-  const sources = p => [
+  const memo = { id: -1, sinks: null, src: {} };
+  let frameNo = 0;
+  const fresh = () => { if (memo.id !== frameNo) { memo.id = frameNo; memo.sinks = null; memo.src = {}; } };
+  const sources = p => { fresh(); return memo.src[p] ||= buildSources(p); };
+  const sinks = () => { fresh(); return memo.sinks ||= buildSinks(); };
+  const buildSources = p => [
     ...crates.filter(c => c.crop === p && on(c.id)).map(c => ({ obj: c, at: c.at, get n() { return c.n; }, take() { c.n--; } })),
     ...pens.filter(pn => pn.product === p && on(pn.id)).map(pn => ({ obj: pn, at: pn.pile, get n() { return pn.n; }, take() { pn.n--; } })),
     ...machines.filter(m => m.out === p && on(m.id)).map(m => ({ obj: m, at: m.outAt, get n() { return m.outN; }, take() { m.outN--; } })),
   ];
-  const sinks = () => [
+  const buildSinks = () => [
     ...stands.filter(s => on(s.id)).map(s => ({ obj: s, p: s.product, at: s.at, get room() { return C.standCap - s.stock; }, put() { s.stock++; } })),
     ...machines.filter(m => on(m.id)).map(m => ({ obj: m, p: m.in, at: m.inAt, get room() { return C.machineCap - m.inN; }, put() { m.inN++; } })),
     ...(cart ? Object.entries(gFill.fill).map(([p, need]) => ({ obj: cart, p, at: cart.at, get room() { return need - (cart.got[p] || 0); }, put() { cart.got[p] = (cart.got[p] || 0) + 1; } })) : []),
@@ -323,6 +340,7 @@ export function runLevel(el, n, api, mode = 'levels') {
 
   // ================= the simulation =================
   function update(dt) {
+    frameNo++;
     movePlayer(dt);
     const capN = cap();
     P.squash = Math.max(0, P.squash - dt * 5);
@@ -409,7 +427,6 @@ export function runLevel(el, n, api, mode = 'levels') {
     while (puffs.length && puffs[0].t > .5) puffs.shift();
     for (const f of floaters) f.t += dt;
     while (floaters.length && floaters[0].t > 1.2) floaters.shift();
-    shake = Math.max(0, shake - dt);
     // the clock and the goals
     if (free) { saveT -= dt; if (saveT <= 0) { saveT = 3; save(); } return; }
     S.timeLeft -= dt;
@@ -445,7 +462,7 @@ export function runLevel(el, n, api, mode = 'levels') {
   function finish(won, reason = '') {
     if (S.phase !== 'play') return;
     S.failReason = reason;
-    S.phase = 'done'; closeSheet(); joy.on = false; joy.dx = joy.dy = 0; joyEl.style.display = 'none';
+    S.phase = 'done'; shake = 0; closeSheet(); joy.on = false; joy.dx = joy.dy = 0; joyEl.style.display = 'none';
     const isLast = n >= LEVELS.length;
     if (won) {
       const stars = starsFor(S.timeLeft, L.time), prev = api.prog.stars(n);
@@ -475,7 +492,7 @@ export function runLevel(el, n, api, mode = 'levels') {
     if (free) {
       const built = UNLOCKS.filter(u => S.unlocked.has(u.id)).length;
       panel(el, {
-        title: 'Free Farm', html: `<p style="text-align:center">Built <b>${built}/${UNLOCKS.length}</b> · earned <b>🪙 ${fmt(S.earned)}</b><br>Saved as you play. Helpers keep earning while you're away.</p>`,
+        title: 'Free Farm', html: `<p style="text-align:center">Built <b>${built}/${UNLOCKS.length}</b> · earned <b>${COIN} ${fmt(S.earned)}</b><br>Saved as you play. Helpers keep earning while you're away.</p>`,
         buttons: [{ label: 'Start over', onClick: () => panel(el, { title: 'Start over?', html: '<p style="text-align:center">This wipes your Free Farm.</p>', buttons: [
             { label: 'Keep it', primary: true, onClick: () => { S.paused = false; last = performance.now(); } },
             { label: 'Wipe it', onClick: () => { writeSave('farm-free', null); api.start(0); } }] }) },
@@ -489,6 +506,33 @@ export function runLevel(el, n, api, mode = 'levels') {
     });
   }
   timeEl.addEventListener('pointerdown', e => e.stopPropagation()); // not a joystick drag
+  questEl.addEventListener('pointerdown', e => e.stopPropagation());
+  // tap the goal bar: every goal with progress and how it works
+  const HOW = {
+    earn: 'Coins from sales count, including special orders and inspection rewards. Starting coins don\'t.',
+    sell: 'Stock the stall; it counts when a customer pays at the register.',
+    serve: 'Each customer you (or the cashier) ring up counts once.',
+    build: 'Stand on its price tile until the coins drain in.',
+    builds: 'Anything you build counts: fields, stalls, pens, machines and helpers.',
+    fill: 'Carry the produce to the festival cart (by the market). Carriers help too.',
+    orders: 'A ⭐ customer waits by the stalls with a bubble of what they want. Walk up with those items before their bar runs out. Pays double.',
+    crows: 'Crows land on ripe crops (red ring = time left). Run close to scare them off. Losing more than allowed fails the level.',
+    streak: 'Ring customers up before they give up (30s in line, or an empty stall). Anyone leaving unhappy resets the streak.',
+    inspect: 'The inspector names one stall 25s ahead and closes it to shoppers; have enough on it in time, or the level fails.',
+  };
+  function goalDetails() {
+    if (free || S.phase !== 'play') return;
+    S.paused = true;
+    const rows = goals().map(gl => {
+      const kind = Object.keys(HOW).find(k => gl[k] !== undefined);
+      const prog = gl.limit ? `lost ${gl.have} of ${gl.need} allowed` : `${fmt(gl.have)} / ${fmt(gl.need)}`;
+      return `<div class="fm-goal"><p><b>${gl.limit ? (gl.done ? '🛡️' : '❌') : gl.done ? '✅' : '🎯'} ${gl.text}</b> <span>${prog}</span></p>` +
+        (gl.limit ? '' : `<span class="bar"><i style="width:${100 * gl.have / gl.need}%"></i></span>`) + `<small>${HOW[kind] || ''}</small></div>`;
+    }).join('');
+    panel(el, { title: `Level ${n} goals`, dismissable: false, html: `<p style="text-align:center;margin-bottom:8px">${mmss(S.timeLeft)} left · paused</p>${rows}`,
+      buttons: [{ label: 'Back to it', primary: true, onClick: () => { S.paused = false; last = performance.now(); } }] });
+  }
+  questEl.onclick = goalDetails;
   timeEl.onclick = pauseMenu;
 
   function refreshFocus() {
@@ -515,14 +559,14 @@ export function runLevel(el, n, api, mode = 'levels') {
         }
       } else if (v.state === 'in') {
         const to = v.y > C.customers.gate.y + .1 ? C.customers.gate : C.vip.spot;
-        if (walkTo(v, to, C.customers.speed * 1.2, dt) && to === C.vip.spot) v.state = 'wait';
+        if (walkTo(v, to, C.customers.speed * 1.2, dt) && to === C.vip.spot) { v.state = 'wait'; frameNo++; }
       } else if (v.state === 'wait') {
         v.wait -= dt;
         if (Object.entries(v.want).every(([p, k]) => (v.got[p] || 0) >= k)) {
           const pay = Math.round(Object.entries(v.want).reduce((a, [p, k]) => a + C.products[p].price * k, 0) * C.vip.bonus * bonus.prices);
-          S.coins += pay; S.earned += pay; orders.done++; v.state = 'out'; v.happy = 1;
+          S.coins += pay; S.earned += pay; orders.done++; v.state = 'out'; v.happy = 1; frameNo++;
           coinsTo(v, 14); float(v.x, v.y - 1.8, `Order filled! +${pay}`, '#FFD23F'); sChime(true); buzz(30); burst(v.x, v.y - 1, '#FFD23F', 14); orders.t = C.vip.every;
-        } else if (v.wait <= 0) { v.state = 'out'; v.sad = 1; orders.missed++; float(v.x, v.y - 1.8, 'Too slow 😤', '#FF8A66'); click(220, .2, .2, 'sine'); orders.t = C.vip.every; }
+        } else if (v.wait <= 0) { frameNo++; v.state = 'out'; v.sad = 1; orders.missed++; float(v.x, v.y - 1.8, 'Too slow 😤', '#FF8A66'); click(220, .2, .2, 'sine'); orders.t = C.vip.every; }
       } else {
         const to = v.y < C.customers.gate.y - .1 ? C.customers.gate : C.customers.spawn;
         if (walkTo(v, to, C.customers.speed * 1.2, dt) && to === C.customers.spawn) orders.vip = null;
@@ -694,7 +738,7 @@ export function runLevel(el, n, api, mode = 'levels') {
       const dots = u.levels.map((_, i) => `<i class="${i <= lvl ? 'on' : ''}"></i>`).join('');
       const detail = locked ? `Needs ${TILES.find(x => x.id === u.needs)?.label || u.needs}` : max ? 'Maxed out' : `${val}${u.unit ? ' ' + u.unit : ''} → ${next}`;
       h += `<div class="fm-up"><span class="ic">${u.icon}</span><span class="nm">${u.label}<span class="fm-lv">${dots}</span><small>${detail}</small></span>` +
-        `<button class="btn ${!locked && !max && S.coins >= price ? 'go' : ''}" data-k="${k}" ${locked || max || S.coins < price ? 'disabled' : ''}>${max ? 'MAX' : '🪙 ' + fmt(price)}</button></div>`;
+        `<button class="btn ${!locked && !max && S.coins >= price ? 'go' : ''}" data-k="${k}" ${locked || max || S.coins < price ? 'disabled' : ''}>${max ? 'MAX' : COIN + ' ' + fmt(price)}</button></div>`;
     }
     sheet.innerHTML = h;
     sheet.querySelectorAll('.btn[data-k]').forEach(b => b.onclick = () => {
@@ -763,7 +807,8 @@ export function runLevel(el, n, api, mode = 'levels') {
     g.setLineDash([T * .16, T * .1]); rr(g, -s / 2, -s / 2, s, s, T * .25); g.lineWidth = Math.max(2, T * .06); g.strokeStyle = afford ? '#FFF2A8' : '#FFFFFF'; g.stroke(); g.setLineDash([]);
     g.font = `${T * .5}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(u.icon, 0, -T * .08);
     g.font = `600 ${T * .3}px Fredoka, sans-serif`; g.lineWidth = 4; g.strokeStyle = INK; g.fillStyle = '#FFE066';
-    const price = '🪙' + fmt(u.price - have); g.strokeText(price, 0, T * .42); g.fillText(price, 0, T * .42);
+    const price = fmt(u.price - have), pw = g.measureText(price).width; // the drawn gold coin, then the number
+    drawItem('coin', -pw / 2 - T * .05, T * .4, .55); g.textAlign = 'left'; g.strokeText(price, -pw / 2 + T * .12, T * .5); g.fillText(price, -pw / 2 + T * .12, T * .5); g.textAlign = 'center';
     g.font = `600 ${T * .24}px Fredoka, sans-serif`; g.fillStyle = '#fff'; g.strokeText(u.label, 0, -s / 2 - T * .14); g.fillText(u.label, 0, -s / 2 - T * .14);
     g.restore(); g.textBaseline = 'alphabetic';
   }
@@ -773,6 +818,7 @@ export function runLevel(el, n, api, mode = 'levels') {
   }
 
   function draw(now) {
+    frameNo++;
     const t = now / 1000;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const sx = shake ? (Math.random() - .5) * shake * T * .5 : 0, sy = shake ? (Math.random() - .5) * shake * T * .5 : 0;
@@ -944,7 +990,7 @@ export function runLevel(el, n, api, mode = 'levels') {
     else if (insp.warning) html = `<span>📋 Inspector checks the ${ICON[insp.stall.product]} stall in <b>${Math.ceil(insp.warning)}s</b>: ${insp.stall.stock}/${gInspect.inspect.min}</span>`;
     else if (free) {
       const gl = ob.goal; const have = gl ? Math.min(gl.price, S.coins + (S.partial[gl.id] || 0)) : 0;
-      html = gl ? `<span>🎯 ${gl.icon} ${gl.label} <b>🪙${fmt(have)}/${fmt(gl.price)}</b></span><span class="bar"><i style="width:${100 * have / gl.price}%"></i></span>` : '<span>🏆 Everything built! Enjoy your farm.</span>';
+      html = gl ? `<span>🎯 ${gl.icon} ${gl.label} <b>${COIN}${fmt(have)}/${fmt(gl.price)}</b></span><span class="bar"><i style="width:${100 * have / gl.price}%"></i></span>` : '<span>🏆 Everything built! Enjoy your farm.</span>';
     }
     else {
       const gs = goals(), cur = gs.find(gl => !gl.done) || gs[gs.length - 1], frac = gs.reduce((a, gl) => a + gl.have / gl.need, 0) / gs.length;
@@ -965,8 +1011,9 @@ export function runLevel(el, n, api, mode = 'levels') {
     if (document.visibilityState === 'visible' && S.phase === 'play' && !S.paused && !offlinePanel) update(dt); // the clock stops when the app is hidden
     const t1 = performance.now();
     for (const c of coinsFx) c.t += dt;
-    const tx = P.x + P.vx * .22 - W / T / 2, ty = P.y + P.vy * .22 - H / T / 2 - .8; // look a little ahead
-    camX += (tx - camX) * Math.min(1, dt * 9); camY += (ty - camY) * Math.min(1, dt * 9);
+    shake = Math.max(0, shake - dt); // fades even when the game is paused or over
+    const tx = P.x - W / T / 2, ty = P.y - H / T / 2 - .8; // centred on you; no look-ahead swing when you turn
+    camX += (tx - camX) * Math.min(1, dt * 12); camY += (ty - camY) * Math.min(1, dt * 12);
     camX = Math.max(-.3, Math.min(C.world.cols + .3 - W / T, camX)); camY = Math.max(0, Math.min(C.world.rows - H / T, camY));
     if (W / T > C.world.cols) camX = (C.world.cols - W / T) / 2;
     const px = T * dpr; camX = Math.round(camX * px) / px; camY = Math.round(camY * px) / px; // whole device pixels: no shimmer
@@ -992,7 +1039,7 @@ export function runLevel(el, n, api, mode = 'levels') {
     const hrs = Math.floor(secs / 3600), mins = Math.round(secs % 3600 / 60);
     offlinePanel = panel(el, {
       title: 'While you were away', mood: 'win',
-      html: `<p style="text-align:center;font-size:34px;margin:4px 0 6px;color:#FFD23F;font-weight:600">+🪙 ${fmt(amt)}</p>` +
+      html: `<p style="text-align:center;font-size:34px;margin:4px 0 6px;color:#FFD23F;font-weight:600">+${COIN} ${fmt(amt)}</p>` +
         `<p style="text-align:center">Your helpers kept the farm running for ${hrs ? hrs + 'h ' : ''}${mins}m.${seconds > secs ? ` (Earnings stop after ${C.offline.maxHours}h.)` : ''}</p>`,
       buttons: [{ label: 'Collect', primary: true, onClick: () => { offlinePanel = null; S.coins += amt; S.earned += amt; coinsTo({ x: camX + W / T / 2, y: camY + H / T / 2 }, 14); sChime(true); save(); last = performance.now(); } }],
     });
@@ -1013,7 +1060,7 @@ export function runLevel(el, n, api, mode = 'levels') {
   else intro();
 
   // handle for the automated checks (scripts/verify.mjs, tests); not used by the game
-  root._dbg = { crows, orders, cart, insp, L, n, goals, focus, go() { el.querySelectorAll('.ov').forEach(o => o.remove()); S.phase = 'play'; }, perf, unlock: id => unlock(TILES.find(u => u.id === id)), S, P, on, cap, fields, pens, machines, stands, crates, helpers, customers, visibleTiles, sinks, sources, save, update, objective, flying, get coins() { return S.coins; }, set coins(v) { S.coins = v; coinShown = v; } };
+  root._dbg = { get shake() { return shake; }, crows, orders, cart, insp, L, n, goals, focus, go() { el.querySelectorAll('.ov').forEach(o => o.remove()); S.phase = 'play'; }, perf, unlock: id => unlock(TILES.find(u => u.id === id)), S, P, on, cap, fields, pens, machines, stands, crates, helpers, customers, visibleTiles, sinks, sources, save, update, objective, flying, get coins() { return S.coins; }, set coins(v) { S.coins = v; coinShown = v; } };
   raf = requestAnimationFrame(frame);
   return () => {
     dead = true; cancelAnimationFrame(raf); ro.disconnect(); save();

@@ -1,7 +1,7 @@
 // Free Farm: Sunny Acres without a clock. Build the whole farm at your own
 // pace; it saves as you play and helpers earn while you're away. Same engine
 // as the levels (farm.js, mode 'free'); balance lives in farm/config.js.
-import { runLevel } from './farm.js';
+import { runLevel, COIN } from './farm.js';
 import { loadSave } from '../lib/progress.js';
 import { pills } from '../lib/ui.js';
 import { UNLOCKS } from './farm/config.js';
@@ -20,7 +20,7 @@ export default {
     <text x="50" y="94" font-size="12" font-weight="700" text-anchor="middle" font-family="Fredoka,sans-serif" fill="#2B1D3A">∞</text></svg>`,
   meta() {
     const sv = loadSave('farm-free'), built = (sv?.unlocked || []).length;
-    return pills([{ value: `🪙 ${sv?.coins ?? 0}`, cls: 'star' }, { label: 'Built', value: `${built}/${UNLOCKS.length}` }]);
+    return pills([{ value: `${COIN} ${sv?.coins ?? 0}`, cls: 'star' }, { label: 'Built', value: `${built}/${UNLOCKS.length}` }]);
   },
   init(el) {
     let stop = null;
