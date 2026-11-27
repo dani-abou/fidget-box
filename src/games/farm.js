@@ -21,7 +21,14 @@ const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? (n / 1e3).to
 const ICON = { carrot: '🥕', corn: '🌽', egg: '🥚', bread: '🍞', pumpkin: '🎃', cheese: '🧀', wool: '🧶' };
 const mmss = t => { t = Math.max(0, Math.ceil(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 /** Text for a level goal, e.g. "Sell 5 🍞". Exported for tests. */
-export const goalText = gl => gl.earn ? `Earn 🪙${fmt(gl.earn)}` : gl.sell ? `Sell ${gl.n} ${ICON[gl.sell]}` : gl.serve ? `Serve ${gl.serve} customers` : `Build the ${UNLOCKS.find(u => u.id === gl.build)?.label.toLowerCase()}`;
+export const goalText = gl =>
+  gl.earn ? `Earn 🪙${fmt(gl.earn)}` : gl.sell ? `Sell ${gl.n} ${ICON[gl.sell]}` : gl.serve ? `Serve ${gl.serve} customers` :
+  gl.fill ? `Fill the festival cart: ${Object.entries(gl.fill).map(([p, k]) => `${k} ${ICON[p]}`).join(' ')}` :
+  gl.orders ? `Fill ${gl.orders} special orders${gl.with ? ` with ${ICON[gl.with]}` : ''}` :
+  gl.crows !== undefined ? `Shoo the crows: lose no more than ${gl.crows} crops` :
+  gl.streak ? `Serve ${gl.streak} happy customers in a row` :
+  gl.inspect ? `Pass ${gl.inspect.at.length} stall inspections (${gl.inspect.min}+ on the stall they pick)` :
+  `Build the ${UNLOCKS.find(u => u.id === gl.build)?.label.toLowerCase()}`;
 /** Stars for finishing with `left` of `total` seconds to spare. */
 export const starsFor = (left, total) => left / total >= STAR_TIME_LEFT[0] ? 3 : left / total >= STAR_TIME_LEFT[1] ? 2 : 1;
 
@@ -55,7 +62,7 @@ export default {
 .fm-time.low{background:#FF8A66;animation:pulse .5s ease-in-out infinite alternate}
 .fm-bag{position:absolute;left:10px;top:58px;z-index:2;pointer-events:none;height:30px;font-size:14px !important;display:flex;align-items:center;padding:0 10px;border-radius:999px;background:#FFF7DD;color:${INK};border:3px solid var(--outline);box-shadow:0 4px 0 var(--outline);font-weight:600;font-size:15px;white-space:nowrap}
 .fm-bag.full{background:#FF8A66;animation:pulse .5s ease-in-out infinite alternate}
-.fm-joy{position:absolute;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;pointer-events:none;background:rgba(255,255,255,.18);border:3px solid rgba(255,255,255,.55);display:none;z-index:2}
+.fm-joy{position:absolute;width:140px;height:140px;margin:-70px 0 0 -70px;border-radius:50%;pointer-events:none;background:rgba(255,255,255,.18);border:3px solid rgba(255,255,255,.55);display:none;z-index:2}
 .fm-joy i{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;background:rgba(255,255,255,.9);border:3px solid var(--outline)}
 .fm-sheet{position:absolute;left:8px;right:8px;bottom:8px;z-index:3;background:linear-gradient(180deg,var(--surface2),var(--surface));border:3px solid var(--outline);border-radius:22px;
   box-shadow:0 6px 0 var(--outline);padding:10px;max-height:58%;overflow:auto;animation:popin .3s cubic-bezier(.3,1.6,.5,1)}
@@ -96,20 +103,30 @@ function runLevel(el, n, api) {
   api.prog.play(n);
   const S = {
     coins: L.coins, unlocked: new Set(L.start), partial: {}, up: {},
-    tut: L.tutorial ? 0 : TUTORIAL.length, earned: 0, sold: {}, served: 0,
+    tut: L.tutorial ? 0 : TUTORIAL.length, earned: 0, sold: {}, served: 0, streak: 0, bestStreak: 0, crowLost: 0, failReason: '',
     timeLeft: L.time, phase: 'intro', paused: false,
   };
   const buildable = new Set(L.build);
   // this level's price tiles (prices scaled by L.priceScale, rounded to 5)
   const TILES = UNLOCKS.map(u => ({ ...u, price: Math.max(5, Math.round(u.price * (L.priceScale ?? 1) / 5) * 5) }));
   // products the level's sell goals depend on (bread -> flour -> wheat); carriers favour these
-  const focus = new Set();
-  const addChain = q => { focus.add(q); for (const m of C.machines) if (m.out === q) addChain(m.in); };
-  for (const gl of L.goals) if (gl.sell) addChain(gl.sell);
+  // products the level is about right now (bread -> flour -> wheat, the cart's and VIP's wants,
+  // stalls the inspector will check); carriers and the arrow favour these
+  const baseFocus = new Set(), focus = new Set();
+  const addChain = (set, q) => { set.add(q); for (const m of C.machines) if (m.out === q) addChain(set, m.in); };
+  for (const gl of L.goals) if (gl.sell) addChain(baseFocus, gl.sell);
+  // level events
+  const gFill = L.goals.find(gl => gl.fill), gOrders = L.goals.find(gl => gl.orders), gCrows = L.goals.find(gl => gl.crows !== undefined);
+  const gStreak = L.goals.find(gl => gl.streak), gInspect = L.goals.find(gl => gl.inspect);
+  const cart = gFill ? { at: C.cart, got: {} } : null;
+  const orders = { done: 0, missed: 0, vip: null, t: 3 };
+  const crows = []; let crowT = C.crows.every[0];
+  const insp = { next: 0, passed: 0 };
   const on = id => START_IDS.has(id) || S.unlocked.has(id);
   const P = { x: sv.player?.x ?? C.world.start.x, y: sv.player?.y ?? C.world.start.y, stack: (sv.player?.stack || []).map(t => ({ t, pop: 1 })),
     look: 1, walk: 0, vx: 0, vy: 0, squash: 0, harvestT: 0, actT: 0 };
   const fields = C.fields.map(f => ({ ...f, plots: Array.from({ length: f.w * f.h }, (_, i) => ({ x: f.x + i % f.w + .5, y: f.y + Math.floor(i / f.w) + .5, g: f.grow, ripeT: 1, claim: null })) }));
+  for (const f of fields) for (const pl of f.plots) pl.field = f;
   const pens = C.pens.map(p => ({ ...p, n: sv.piles?.[p.id] ?? 0, timer: 0,
     animals: Array.from({ length: p.animals }, (_, i) => ({ x: p.x + .6 + Math.random() * (p.w - 1.2), y: p.y + .8 + Math.random() * (p.h - 1), tx: 0, ty: 0, look: 1, t: i })) }));
   const machines = C.machines.map(m => ({ ...m, inN: sv.machines?.[m.id]?.in ?? 0, outN: sv.machines?.[m.id]?.out ?? 0, prog: 0,
@@ -182,7 +199,7 @@ function runLevel(el, n, api) {
   root.addEventListener('pointermove', e => {
     if (!joy.on || e.pointerId !== joy.id) return;
     const r = root.getBoundingClientRect(); let dx = e.clientX - r.left - joy.ox, dy = e.clientY - r.top - joy.oy;
-    const m = Math.hypot(dx, dy), max = 42; if (m > max) { dx *= max / m; dy *= max / m; }
+    const m = Math.hypot(dx, dy), max = 56; if (m > max) { dx *= max / m; dy *= max / m; }
     joy.dx = dx / max; joy.dy = dy / max; knob.style.transform = `translate(${dx}px,${dy}px)`;
   });
   const endJoy = e => { if (e.pointerId === joy.id) { joy.on = false; joy.dx = joy.dy = 0; joyEl.style.display = 'none'; } };
@@ -196,8 +213,10 @@ function runLevel(el, n, api) {
     if (keys.has('arrowup') || keys.has('w')) my -= 1; if (keys.has('arrowdown') || keys.has('s')) my += 1;
     const m = Math.hypot(mx, my), sp = up(S, 'speed');
     let vx = 0, vy = 0;
-    if (m > .12) { const k = Math.min(1, m) / m * sp; vx = mx * k; vy = my * k; P.look = Math.sign(mx) || P.look; }
-    P.vx += (vx - P.vx) * Math.min(1, dt * 12); P.vy += (vy - P.vy) * Math.min(1, dt * 12);
+    // dead zone, then a quick ramp: half a thumb's travel is already full speed, so small wobbles don't change speed
+    if (m > .1) { const k = Math.min(1, (m - .1) / .4) / m * sp; vx = mx * k; vy = my * k; if (Math.abs(mx) > .15) P.look = Math.sign(mx); }
+    const resp = vx || vy ? 18 : 24; // speeds up fast, stops a little faster
+    P.vx += (vx - P.vx) * Math.min(1, dt * resp); P.vy += (vy - P.vy) * Math.min(1, dt * resp);
     P.x = Math.max(.45, Math.min(C.world.cols - .45, P.x + P.vx * dt));
     P.y = Math.max(topLimit(), Math.min(43.3, P.y + P.vy * dt));
     P.walk += Math.hypot(P.vx, P.vy) * dt;
@@ -218,7 +237,10 @@ function runLevel(el, n, api) {
   const sinks = () => [
     ...stands.filter(s => on(s.id)).map(s => ({ obj: s, p: s.product, at: s.at, get room() { return C.standCap - s.stock; }, put() { s.stock++; } })),
     ...machines.filter(m => on(m.id)).map(m => ({ obj: m, p: m.in, at: m.inAt, get room() { return C.machineCap - m.inN; }, put() { m.inN++; } })),
+    ...(cart ? Object.entries(gFill.fill).map(([p, need]) => ({ obj: cart, p, at: cart.at, get room() { return need - (cart.got[p] || 0); }, put() { cart.got[p] = (cart.got[p] || 0) + 1; } })) : []),
+    ...(orders.vip?.state === 'wait' ? Object.entries(orders.vip.want).map(([p, need]) => { const v = orders.vip; return { obj: v, p, at: v, get room() { return need - (v.got[p] || 0) - (v.coming[p] || 0); }, put() { v.got[p] = (v.got[p] || 0) + 1; v.coming[p]--; }, reserve() { v.coming[p] = (v.coming[p] || 0) + 1; } }; }) : []),
   ];
+  const producible = p => fields.some(f => f.crop === p && on(f.id)) || pens.some(q => q.product === p && on(q.id)) || machines.some(m => m.out === p && on(m.id) && producible(m.in));
 
   // ================= the simulation =================
   function update(dt) {
@@ -256,7 +278,7 @@ function runLevel(el, n, api) {
       if (!acted) for (const sk of sinks()) {
         if (sk.room <= 0 || d2(P, sk.at) > C.player.reach) continue;
         const i = P.stack.map(s => s.t).lastIndexOf(sk.p); if (i < 0) continue;
-        P.stack.splice(i, 1); fly(sk.p, { x: P.x, y: P.y - 1.2 }, sk.at, .22, () => sk.put()); sTick(P.stack.length); acted = true;
+        P.stack.splice(i, 1); sk.reserve?.(); fly(sk.p, { x: P.x, y: P.y - 1.2 }, { x: sk.at.x, y: sk.at.y }, .22, () => sk.put()); sTick(P.stack.length); acted = true;
         P.actT = C.player.dropInterval;
         if (S.tut === 1 && sk.obj.product) S.tut = 2;
         break;
@@ -279,6 +301,8 @@ function runLevel(el, n, api) {
       m.busy = m.inN > 0 && m.outN < C.machineCap;
       if (m.busy) { m.prog += dt * mSpeed / m.time; if (m.prog >= 1) { m.prog = 0; m.inN--; fly(m.out, { x: m.x, y: m.y - .3 }, m.outAt, .3, () => m.outN++); } }
     }
+    // --- level events ---
+    updateEvents(dt);
     // --- helpers ---
     updateHelpers(dt);
     // --- customers ---
@@ -310,18 +334,21 @@ function runLevel(el, n, api) {
     // the clock and the goals
     S.timeLeft -= dt;
     if (S.timeLeft <= 10 && Math.ceil(S.timeLeft) !== Math.ceil(S.timeLeft + dt)) { click(1300, .03, .1, 'square'); buzz(8); }
-    if (goals().every(gl => gl.done)) finish(true);
+    if (S.phase === 'play' && goals().every(gl => gl.done)) finish(true);
     else if (S.timeLeft <= 0) finish(false);
   }
 
   // ================= goals, start and finish =================
   function goals() {
     return L.goals.map(gl => {
-      const [have, need] = gl.earn ? [S.earned, gl.earn] : gl.sell ? [S.sold[gl.sell] || 0, gl.n] : gl.serve ? [S.served, gl.serve] : [on(gl.build) ? 1 : 0, 1];
+      if (gl.crows !== undefined) return { ...gl, have: S.crowLost, need: gl.crows, done: S.crowLost <= gl.crows, limit: true, text: goalText(gl) };
+      const [have, need] = gl.earn ? [S.earned, gl.earn] : gl.sell ? [S.sold[gl.sell] || 0, gl.n] : gl.serve ? [S.served, gl.serve] :
+        gl.fill ? [Object.entries(gl.fill).reduce((a, [p, k]) => a + Math.min(k, cart.got[p] || 0), 0), Object.values(gl.fill).reduce((a, k) => a + k, 0)] :
+        gl.orders ? [orders.done, gl.orders] : gl.streak ? [S.bestStreak, gl.streak] : gl.inspect ? [insp.passed, gl.inspect.at.length] : [on(gl.build) ? 1 : 0, 1];
       return { ...gl, have: Math.min(have, need), need, done: have >= need, text: goalText(gl) };
     });
   }
-  const goalList = () => goals().map(gl => `<p style="margin:0 0 6px">${gl.done ? '✅' : '🎯'} <b>${gl.text}</b>${gl.need > 1 ? ` <span style="opacity:.7">(${fmt(gl.have)}/${fmt(gl.need)})</span>` : ''}</p>`).join('');
+  const goalList = () => goals().map(gl => `<p style="margin:0 0 6px">${gl.limit ? (gl.done ? '🛡️' : '❌') : gl.done ? '✅' : '🎯'} <b>${gl.text}</b>${gl.limit ? ` <span style="opacity:.7">(lost ${gl.have})</span>` : gl.need > 1 ? ` <span style="opacity:.7">(${fmt(gl.have)}/${fmt(gl.need)})</span>` : ''}</p>`).join('');
   function intro() {
     panel(el, {
       title: `Level ${n}: ${L.name}`,
@@ -330,8 +357,9 @@ function runLevel(el, n, api) {
       buttons: [{ label: 'Levels', onClick: () => api.pick() }, { label: 'Start', primary: true, onClick: () => { S.phase = 'play'; last = performance.now(); sChime(false); } }],
     });
   }
-  function finish(won) {
+  function finish(won, reason = '') {
     if (S.phase !== 'play') return;
+    S.failReason = reason;
     S.phase = 'done'; closeSheet(); joy.on = false; joy.dx = joy.dy = 0; joyEl.style.display = 'none';
     const isLast = n >= LEVELS.length;
     if (won) {
@@ -347,8 +375,8 @@ function runLevel(el, n, api) {
     } else {
       click(220, .35, .25, 'sine'); buzz(30);
       panel(el, {
-        title: "Time's up!", mood: 'lose',
-        html: `<p style="text-align:center;margin-bottom:10px">Here's how far you got:</p>${goalList()}`,
+        title: reason ? 'Level failed' : "Time's up!", mood: 'lose',
+        html: `<p style="text-align:center;margin-bottom:10px">${reason || "Here's how far you got:"}</p>${goalList()}`,
         buttons: [{ label: 'Levels', onClick: () => api.pick() }, { label: 'Try again', primary: true, onClick: () => api.start(n) }],
       });
     }
@@ -363,6 +391,87 @@ function runLevel(el, n, api) {
   }
   timeEl.addEventListener('pointerdown', e => e.stopPropagation()); // not a joystick drag
   timeEl.onclick = pauseMenu;
+
+  function refreshFocus() {
+    focus.clear(); for (const q of baseFocus) focus.add(q);
+    if (cart) for (const [p, k] of Object.entries(gFill.fill)) if ((cart.got[p] || 0) < k) addChain(focus, p);
+    if (orders.vip) for (const p of Object.keys(orders.vip.want)) addChain(focus, p);
+    if (insp.warning) for (const st of stands) if (insp.check?.has(st.id) && st.stock < gInspect.inspect.min) addChain(focus, st.product);
+  }
+  function updateEvents(dt) {
+    const elapsed = L.time - S.timeLeft;
+    // special orders: one VIP at a time walks up with a basket they want filled
+    if (gOrders && orders.done < gOrders.orders) {
+      const v = orders.vip;
+      if (!v) {
+        orders.t -= dt;
+        const can = Object.keys(ICON).filter(p => producible(p) && stands.some(st => st.product === p && on(st.id)));
+        if (orders.t <= 0 && can.length && (!gOrders.with || can.includes(gOrders.with))) {
+          const kinds = [gOrders.with || can[Math.floor(Math.random() * can.length)]];
+          const other = can.filter(p => p !== kinds[0]); if (other.length && Math.random() < .75) kinds.push(other[Math.floor(Math.random() * other.length)]);
+          const total = C.vip.items[0] + Math.floor(Math.random() * (C.vip.items[1] - C.vip.items[0] + 1)), want = {};
+          for (let i = 0; i < total; i++) { const p = kinds[i % kinds.length]; want[p] = (want[p] || 0) + 1; }
+          orders.vip = { x: C.customers.spawn.x, y: C.customers.spawn.y, look: 1, walk: 0, state: 'in', want, got: {}, coming: {}, wait: C.vip.patience };
+          float(C.vip.spot.x, C.vip.spot.y - 1.6, '⭐ Special order!', '#FFD23F'); tone(1319);
+        }
+      } else if (v.state === 'in') {
+        const to = v.y > C.customers.gate.y + .1 ? C.customers.gate : C.vip.spot;
+        if (walkTo(v, to, C.customers.speed * 1.2, dt) && to === C.vip.spot) v.state = 'wait';
+      } else if (v.state === 'wait') {
+        v.wait -= dt;
+        if (Object.entries(v.want).every(([p, k]) => (v.got[p] || 0) >= k)) {
+          const pay = Object.entries(v.want).reduce((a, [p, k]) => a + C.products[p].price * k, 0) * C.vip.bonus;
+          S.coins += pay; S.earned += pay; orders.done++; v.state = 'out'; v.happy = 1;
+          coinsTo(v, 14); float(v.x, v.y - 1.8, `Order filled! +${pay}`, '#FFD23F'); sChime(true); buzz(30); burst(v.x, v.y - 1, '#FFD23F', 14); orders.t = C.vip.every;
+        } else if (v.wait <= 0) { v.state = 'out'; v.sad = 1; orders.missed++; float(v.x, v.y - 1.8, 'Too slow 😤', '#FF8A66'); click(220, .2, .2, 'sine'); orders.t = C.vip.every; }
+      } else {
+        const to = v.y < C.customers.gate.y - .1 ? C.customers.gate : C.customers.spawn;
+        if (walkTo(v, to, C.customers.speed * 1.2, dt) && to === C.customers.spawn) orders.vip = null;
+      }
+    }
+    // crows: land on ripe crops; get close and they scatter
+    if (gCrows) {
+      crowT -= dt;
+      const ripe = fields.filter(f => on(f.id)).flatMap(f => f.plots.filter(pl => pl.g >= f.grow && !crows.some(c => c.plot === pl)));
+      if (crowT <= 0 && ripe.length && crows.filter(c => c.state !== 'flee').length < C.crows.max) {
+        crowT = C.crows.every[0] + Math.random() * (C.crows.every[1] - C.crows.every[0]);
+        const plot = ripe[Math.floor(Math.random() * ripe.length)], from = { x: plot.x + (Math.random() < .5 ? -6 : 6), y: plot.y - 5 };
+        crows.push({ plot, x: from.x, y: from.y, fx: from.x, fy: from.y, state: 'fly', t: 0, flap: Math.random() * 6 });
+        click(900, .08, .12, 'sawtooth');
+      }
+      for (const c of [...crows]) {
+        c.t += dt; c.flap += dt * 14;
+        if (c.state !== 'flee' && d2(P, c.plot) < C.crows.scare) { c.state = 'flee'; c.t = 0; c.fx = c.x; c.fy = c.y; click(1400, .06, .14, 'square'); buzz(8); burst(c.x, c.y - .3, '#2B1D3A', 6); float(c.x, c.y - 1.2, 'Shoo!', '#FFFFFF'); }
+        if (c.state === 'fly') { const k = Math.min(1, c.t / C.crows.fly); c.x = c.fx + (c.plot.x - c.fx) * k; c.y = c.fy + (c.plot.y - .1 - c.fy) * k - Math.sin(k * Math.PI) * 1.2; if (k >= 1) { c.state = 'peck'; c.t = 0; } }
+        else if (c.state === 'peck') {
+          if (c.plot.g < c.plot.field.grow) { c.state = 'flee'; c.t = 0; c.fx = c.x; c.fy = c.y; } // harvested first
+          else if (c.t >= C.crows.peck) {
+            c.plot.g = 0; S.crowLost++; c.state = 'flee'; c.t = 0; c.fx = c.x; c.fy = c.y;
+            float(c.x, c.y - 1, `A crow ate one! (${S.crowLost}/${gCrows.crows} allowed)`, '#FF8A66'); click(300, .15, .2, 'sawtooth'); shake = .15;
+            if (S.crowLost > gCrows.crows) finish(false, `The crows ate ${S.crowLost} crops (${gCrows.crows} allowed).`);
+          }
+        } else { c.x = c.fx + c.t * 7 * (c.fx < 7 ? -1 : 1); c.y = c.fy - c.t * 6; if (c.t > 1.2) crows.splice(crows.indexOf(c), 1); }
+      }
+    }
+    // inspections: a warning, then every open stall must have enough on it
+    if (gInspect && insp.next < gInspect.inspect.at.length) {
+      const due = gInspect.inspect.at[insp.next];
+      insp.warning = elapsed >= due - C.inspect.warn ? Math.max(.01, due - elapsed) : 0;
+      if (insp.warning && !insp.warned) { // pick one stall to inspect: the emptiest one that can be stocked
+        insp.warned = true;
+        const pickable = stands.filter(st => on(st.id) && producible(st.product)).sort((a, b) => a.stock - b.stock || Math.random() - .5);
+        insp.stall = pickable[0] || stands[0]; insp.check = new Set([insp.stall.id]);
+        float(insp.stall.at.x, insp.stall.at.y - 2.6, `📋 Inspector checks this stall!`, '#FFD23F'); tone(880);
+      }
+      if (elapsed >= due) {
+        const short = stands.filter(st => insp.check?.has(st.id) && st.stock < gInspect.inspect.min);
+        insp.next++; insp.warned = false; insp.warning = 0;
+        if (short.length) finish(false, `The inspector found only ${short[0].stock} on the ${C.products[short[0].product].name.toLowerCase()} stall (needed ${gInspect.inspect.min}).`);
+        else { insp.passed++; S.coins += C.inspect.reward; S.earned += C.inspect.reward; sChime(true); float(7, 36.4, `Inspection passed! +${C.inspect.reward}`, '#4FE378'); for (const st of stands) if (on(st.id)) burst(st.at.x, st.at.y - 1, '#4FE378', 4); }
+      }
+    }
+    refreshFocus();
+  }
 
   function updateHelpers(dt) {
     const hs = up(S, 'helperSpeed'), hc = up(S, 'helperCarry');
@@ -400,7 +509,7 @@ function runLevel(el, n, api) {
           const claimed = helpers.filter(o => o !== h && o.kind === 'carrier' && o.job?.sink?.obj === sk.obj).reduce((a, o) => a + o.job.n, 0); // only other carriers' deliveries
           const room = sk.room - claimed; if (room <= 0) continue;
           for (const src of sources(sk.p)) if (src.n > 0) {
-            const score = room + src.n * .5 - d2(h, src.at) * .3 + (focus.has(sk.p) ? 25 : 0); // goal chain first
+            const score = room + src.n * .5 - d2(h, src.at) * .3 + (focus.has(sk.p) ? 25 : 0) + (sk.obj === cart || sk.obj === orders.vip ? 15 : 0); // goal chain first
             if (!best || score > best.score) best = { src, sink: sk, n: Math.min(hc, src.n, room), score };
           }
         }
@@ -413,12 +522,17 @@ function runLevel(el, n, api) {
           else h.phase = h.stack.length ? 'put' : (h.job = null, 'get');
         }
       } else if (walkTo(h, j.sink.at, hs, dt) && h.t <= 0) {
-        if (h.stack.length && j.sink.room > 0) { h.stack.pop(); fly(j.sink.p, { x: h.x, y: h.y - 1 }, j.sink.at, .2, () => j.sink.put()); h.t = .1; }
+        if (h.stack.length && j.sink.room > 0 && (j.sink.obj !== orders.vip || orders.vip?.state === 'wait')) { h.stack.pop(); j.sink.reserve?.(); fly(j.sink.p, { x: h.x, y: h.y - 1 }, { x: j.sink.at.x, y: j.sink.at.y }, .2, () => j.sink.put()); h.t = .1; }
         else { h.job = null; if (h.stack.length) h.stack.length = 0; }
       }
     }
   }
 
+  function unhappy(c) {
+    c.sad = 1;
+    if (gStreak && S.streak > 0) { float(c.x, c.y - 1.8, `Streak lost (${S.streak})`, '#FF8A66'); click(220, .2, .2, 'sine'); buzz(20); }
+    S.streak = 0;
+  }
   function updateCustomers(dt) {
     const cc = C.customers, open = stands.filter(s => on(s.id));
     const every = Math.max(cc.everyMin, cc.every + cc.everyPerStand * open.length);
@@ -437,10 +551,11 @@ function runLevel(el, n, api) {
       if (c.state === 'in') { if (walkTo(c, cc.gate, cc.speed, dt)) c.state = 'shop'; }
       else if (c.state === 'shop') {
         if (walkTo(c, c.stand.spot, cc.speed, dt)) {
-          if (c.got.length < c.want && c.stand.stock > 0) { if (c.t <= 0) { c.stand.stock--; c.got.push(c.stand.product); fly(c.stand.product, c.stand.at, { x: c.x, y: c.y - .9 }, .2); c.t = cc.takeInterval; c.wait = 0; } }
-          else if (c.got.length >= c.want || (c.wait += dt) > cc.patience) c.state = c.got.length ? 'queue' : 'leave';
+          if (c.got.length < c.want && c.stand.stock > 0 && !(insp.warning && insp.stall === c.stand)) { /* the inspected stall is closed during the warning */ if (c.t <= 0) { c.stand.stock--; c.got.push(c.stand.product); fly(c.stand.product, c.stand.at, { x: c.x, y: c.y - .9 }, .2); c.t = cc.takeInterval; c.wait = 0; } }
+          else if (c.got.length >= c.want || (c.wait += dt) > cc.patience) { c.state = c.got.length ? 'queue' : 'leave'; c.qwait = 0; if (!c.got.length) unhappy(c); }
         }
       } else if (c.state === 'queue') {
+        if ((c.qwait += dt) > cc.queuePatience) { c.state = 'leave'; c.stand.stock += c.got.length; c.got = []; unhappy(c); continue; } // gave up waiting in line
         const i = queue.indexOf(c), slot = C.register.queue[Math.min(i, C.register.queue.length - 1)];
         walkTo(c, { x: slot[0], y: slot[1] }, cc.speed, dt);
       } else if (c.state === 'leave') {
@@ -455,7 +570,9 @@ function runLevel(el, n, api) {
       if (checkoutT >= 1) {
         checkoutT = 0;
         const pay = front.got.reduce((a, p) => a + C.products[p].price, 0);
-        S.coins += pay; S.earned += pay; S.served++; for (const p of front.got) S.sold[p] = (S.sold[p] || 0) + 1;
+          S.coins += pay; S.earned += pay; S.served++; for (const p of front.got) S.sold[p] = (S.sold[p] || 0) + 1;
+          S.streak++; S.bestStreak = Math.max(S.bestStreak, S.streak);
+          if (gStreak && S.streak > 1) float(front.x, front.y - 2.1, `${S.streak} in a row!`, '#4FE378');
         coinsTo(C.register.counter, Math.ceil(pay / 2) + 2);
         float(C.register.counter.x, C.register.counter.y - 1, '+' + pay, '#FFD23F');
         click(1800, .04, .12, 'sine'); buzz(10);
@@ -497,6 +614,13 @@ function runLevel(el, n, api) {
       if (S.tut === 1) return { text: TUTORIAL[1].text, at: stands[0].at };
       return { text: TUTORIAL[2].text, at: C.register.mat };
     }
+    const pecking = crows.filter(c => c.state !== 'flee').sort((a, b) => d2(P, a.plot) - d2(P, b.plot))[0];
+    if (pecking) return { at: pecking.plot };
+    const carrying = new Set(P.stack.map(s => s.t));
+    const v = orders.vip;
+    if (v?.state === 'wait' && Object.entries(v.want).some(([p, k]) => carrying.has(p) && (v.got[p] || 0) < k)) return { at: v };
+    if (cart && Object.entries(gFill.fill).some(([p, k]) => carrying.has(p) && (cart.got[p] || 0) < k)) return { at: cart.at };
+    if (insp.warning) { const st = stands.find(x => insp.check?.has(x.id) && x.stock < gInspect.inspect.min && carrying.has(x.product)); if (st) return { at: st.at }; }
     const tiles = visibleTiles(), goal = tiles.slice().sort((a, b) => (a.price - (S.partial[a.id] || 0)) - (b.price - (S.partial[b.id] || 0)))[0];
     let at = null;
     const queueWaiting = customers.some(c => c.state === 'queue') && !helpers.some(h => h.kind === 'cashier');
@@ -508,10 +632,13 @@ function runLevel(el, n, api) {
     return { goal, at };
   }
   function nearestSink() { let best = null, bd = 1e9; const types = new Set(P.stack.map(s => s.t)); for (const sk of sinks()) if (types.has(sk.p) && sk.room > 0) { const d = d2(P, sk.at); if (d < bd) { bd = d; best = sk.at; } } return best; }
-  function nearestSource() {
+  function nearestSource() { // the level's products first, anything else otherwise
+    return (focus.size && nearestSourceOf(p => focus.has(p))) || nearestSourceOf(() => true);
+  }
+  function nearestSourceOf(ok) {
     let best = null, bd = 1e9;
-    for (const f of fields) if (on(f.id)) for (const pl of f.plots) if (pl.g >= f.grow) { const d = d2(P, pl); if (d < bd) { bd = d; best = pl; } }
-    for (const p of Object.keys(C.products)) for (const src of sources(p)) if (src.n > 0 && sinks().some(sk => sk.p === p && sk.room > 0)) { const d = d2(P, src.at); if (d < bd) { bd = d; best = src.at; } }
+    for (const f of fields) if (on(f.id) && ok(f.crop)) for (const pl of f.plots) if (pl.g >= f.grow) { const d = d2(P, pl); if (d < bd) { bd = d; best = pl; } }
+    for (const p of Object.keys(C.products)) if (ok(p)) for (const src of sources(p)) if (src.n > 0 && sinks().some(sk => sk.p === p && sk.room > 0)) { const d = d2(P, src.at); if (d < bd) { bd = d; best = src.at; } }
     return best;
   }
 
@@ -601,6 +728,27 @@ function runLevel(el, n, api) {
       drawItem(s.product, X(s.x), Y(C.standY) - T * 1.62, .7);
     }
     art.register(g, X(C.register.counter.x), Y(C.register.counter.y));
+    // festival cart: bunting, wheels and a card of what it still needs
+    if (cart && onScreen(cart.at.x, cart.at.y, 3)) {
+      const x = X(cart.at.x), y = Y(cart.at.y), s = T, lw = Math.max(1.5, s * .05);
+      for (const dx of [-.55, .55]) { g.beginPath(); g.arc(x + dx * s, y + s * .32, s * .2, 0, 7); g.fillStyle = '#8A5A36'; g.fill(); g.lineWidth = lw; g.strokeStyle = INK; g.stroke(); }
+      rr(g, x - s * .85, y - s * .45, s * 1.7, s * .75, s * .12); g.fillStyle = '#E58A5C'; g.fill(); g.lineWidth = lw; g.strokeStyle = INK; g.stroke();
+      g.strokeStyle = '#8A5A36'; g.lineWidth = lw * 1.2; g.beginPath(); g.moveTo(x - s * .85, y - s * .45); g.lineTo(x - s * .85, y - s * 1.15); g.moveTo(x + s * .85, y - s * .45); g.lineTo(x + s * .85, y - s * 1.15); g.stroke();
+      const flags = ['#FF6B6B', '#FFD23F', '#4FE3B2', '#5EC6FF', '#AE8CFF'];
+      for (let i = 0; i < 5; i++) { const fx = x - s * .8 + i * s * .4; g.beginPath(); g.moveTo(fx, y - s * 1.12); g.lineTo(fx + s * .4, y - s * 1.12); g.lineTo(fx + s * .2, y - s * .88); g.closePath(); g.fillStyle = flags[i]; g.fill(); }
+      let i = 0; for (const [p, k] of Object.entries(cart.got)) for (let j = 0; j < Math.min(k, 4); j++, i++) drawItem(p, x - s * .6 + (i % 8) * s * .17, y - s * .32 - Math.floor(i / 8) * s * .14, .55);
+      const items = Object.entries(gFill.fill), cw = items.length * s * .9 + s * .2;
+      rr(g, x - cw / 2, y - s * 2.15, cw, s * .62, s * .2); g.fillStyle = '#FFF7DD'; g.fill(); g.lineWidth = lw; g.strokeStyle = INK; g.stroke();
+      g.font = `600 ${s * .24}px Fredoka, sans-serif`; g.textAlign = 'left';
+      items.forEach(([p, k], j) => { const ix = x - cw / 2 + s * .25 + j * s * .9, got = Math.min(k, cart.got[p] || 0); drawItem(p, ix, y - s * 1.84, .6); g.fillStyle = got >= k ? '#2E9E5B' : INK; g.fillText(got >= k ? '✓' : `${got}/${k}`, ix + s * .18, y - s * 1.76); });
+    }
+    // inspection warning: a red ! over any stall that's short
+    if (insp.warning) for (const st of stands) if (insp.check?.has(st.id) && st.stock < gInspect.inspect.min) {
+      const x = X(st.x), y = Y(C.standY) - T * 2.05 - Math.abs(Math.sin(t * 6)) * T * .15;
+      g.beginPath(); g.arc(x, y, T * .26, 0, 7); g.fillStyle = '#FF5A4E'; g.fill(); g.lineWidth = 3; g.strokeStyle = INK; g.stroke();
+      g.fillStyle = '#fff'; g.font = `700 ${T * .34}px Fredoka, sans-serif`; g.textAlign = 'center'; g.fillText('!', x, y + T * .12);
+      g.font = `600 ${T * .22}px Fredoka, sans-serif`; g.lineWidth = 4; g.strokeStyle = INK; g.strokeText('Closed for inspection', X(st.x), Y(C.standY) + T * .62); g.fillText('Closed for inspection', X(st.x), Y(C.standY) + T * .62);
+    }
     // everyone, back to front
     const people = [];
     for (const c of customers) people.push([c.y, () => {
@@ -611,11 +759,38 @@ function runLevel(el, n, api) {
     }]);
     for (const h of helpers) people.push([h.y, () => { const b = Math.abs(Math.sin((h.walk || 0) * 7)) * T * .04; art.person(g, X(h.x), Y(h.y), { kind: h.kind, look: h.look, bob: b }); drawStack(h, h.stack, X(h.x), Y(h.y) - b); }]);
     people.push([P.y, () => {
-      const moving = Math.hypot(P.vx, P.vy) > .3, w = Math.sin(P.walk * 7);
-      const sq = P.squash * .16, sy = (moving ? 1 + w * .05 : 1 + Math.sin(t * 3) * .02) - sq, sx = 1 / sy + sq * .3;
-      const bob = moving ? Math.abs(w) * T * .05 : 0;
+      const moving = Math.hypot(P.vx, P.vy) > .3, w = Math.sin(P.walk * 5.5);
+      const sq = P.squash * .14, sy = (moving ? 1 + w * .03 : 1 + Math.sin(t * 3) * .02) - sq, sx = 1 / sy + sq * .3;
+      const bob = moving ? Math.abs(w) * T * .035 : 0;
       art.person(g, X(P.x), Y(P.y), { kind: 'player', look: P.look, sx, sy, bob });
       drawStack(P, P.stack, X(P.x), Y(P.y) - bob);
+    }]);
+    const v = orders.vip;
+    if (v) people.push([v.y, () => {
+      art.person(g, X(v.x), Y(v.y), { kind: 'customer', shirt: '#FFD23F', look: v.look, bob: Math.abs(Math.sin((v.walk || 0) * 5.5)) * T * .03 });
+      g.font = `${T * .36}px sans-serif`; g.textAlign = 'center'; g.fillText(v.happy ? '😍' : v.sad ? '😤' : '⭐', X(v.x), Y(v.y) - T * 1.18);
+      if (v.state === 'wait') { // the order bubble with a patience bar
+        const entries = Object.entries(v.want), bw = entries.length * T * .95 + T * .3, bx = X(v.x) - bw / 2, by = Y(v.y) - T * 2.35;
+        rr(g, bx, by, bw, T * .8, T * .22); g.fillStyle = '#FFFFFF'; g.fill(); g.lineWidth = 3; g.strokeStyle = INK; g.stroke();
+        g.font = `600 ${T * .24}px Fredoka, sans-serif`; g.textAlign = 'left';
+        entries.forEach(([p, k], j) => { const ix = bx + T * .32 + j * T * .95, left = k - (v.got[p] || 0); drawItem(p, ix, by + T * .33, .62); g.fillStyle = left <= 0 ? '#2E9E5B' : INK; g.fillText(left <= 0 ? '✓' : '×' + left, ix + T * .2, by + T * .42); });
+        const k = Math.max(0, v.wait / C.vip.patience);
+        rr(g, bx + T * .12, by + T * .6, bw - T * .24, T * .1, T * .05); g.fillStyle = 'rgba(43,29,58,.15)'; g.fill();
+        rr(g, bx + T * .12, by + T * .6, (bw - T * .24) * k, T * .1, T * .05); g.fillStyle = k > .35 ? '#4FE378' : '#FF8A66'; g.fill();
+      }
+    }]);
+    for (const c of crows) people.push([c.y + 5, () => { // crows draw above people
+      const x = X(c.x), y = Y(c.y), s = T, flap = c.state === 'peck' ? Math.sin(c.flap * .4) * .15 : Math.sin(c.flap) * .6;
+      if (c.state === 'peck') { g.beginPath(); g.arc(X(c.plot.x), Y(c.plot.y), T * .5, 0, 7); g.strokeStyle = `rgba(255,90,78,${.5 + Math.sin(t * 10) * .3})`; g.lineWidth = 3; g.stroke();
+        g.beginPath(); g.arc(X(c.plot.x), Y(c.plot.y), T * .5, -Math.PI / 2, -Math.PI / 2 + (c.t / C.crows.peck) * Math.PI * 2); g.strokeStyle = '#FF5A4E'; g.lineWidth = 4; g.stroke(); }
+      g.fillStyle = 'rgba(0,0,0,.18)'; if (c.state === 'peck') { g.beginPath(); g.ellipse(x, y + s * .05, s * .22, s * .07, 0, 0, 7); g.fill(); }
+      g.save(); g.translate(x, y - s * .3); g.scale((c.fx > c.plot.x ? -1 : 1) * 1.35, 1.35); // a bit bigger so it's easy to spot
+      for (const side of [-1, 1]) { g.save(); g.rotate(side * flap); g.beginPath(); g.ellipse(-s * .05, -s * .05, s * .26, s * .09, side * .4, 0, 7); g.fillStyle = '#3A3550'; g.fill(); g.restore(); }
+      g.beginPath(); g.ellipse(0, 0, s * .2, s * .14, 0, 0, 7); g.fillStyle = '#2B2640'; g.fill(); g.lineWidth = 2; g.strokeStyle = INK; g.stroke();
+      g.beginPath(); g.arc(s * .16, -s * .08, s * .1, 0, 7); g.fill(); g.stroke();
+      g.fillStyle = '#FFB020'; g.beginPath(); g.moveTo(s * .25, -s * .1); g.lineTo(s * .36, -s * .06); g.lineTo(s * .25, -s * .03); g.fill();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(s * .19, -s * .11, s * .03, 0, 7); g.fill();
+      g.restore();
     }]);
     people.sort((a, b) => a[0] - b[0]).forEach(p => p[1]());
     if (checkoutT > 0) ring(X(C.register.counter.x), Y(C.register.counter.y) - T * 1.2, checkoutT, '#4FE378');
@@ -645,7 +820,7 @@ function runLevel(el, n, api) {
     g.globalAlpha = 1;
     // coins flying to the counter (screen space)
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const cr = coinEl.querySelector('i').getBoundingClientRect(), rr0 = root.getBoundingClientRect(), tx = cr.left - rr0.left + cr.width / 2, ty = cr.top - rr0.top + cr.height / 2;
+    const { x: tx, y: ty } = coinTarget; // measured on resize, not per frame (reading layout every frame causes hitches)
     for (let i = coinsFx.length - 1; i >= 0; i--) {
       const c = coinsFx[i]; if (c.t < 0) continue;
       const k = Math.min(1, c.t / c.dur), e = k * k * (3 - 2 * k);
@@ -657,20 +832,22 @@ function runLevel(el, n, api) {
   }
 
   // ================= HUD =================
-  let questKey = '', sheetKey = '';
+  let questKey = '', sheetKey = '', coinTarget = { x: 30, y: 30 };
+  const setText = (el, v) => { if (el.textContent !== v) el.textContent = v; }; // untouched DOM = no layout work
   const perf = { update: 0, draw: 0, hud: 0 };
   function hud(ob) {
     coinShown += (S.coins - coinShown) * .18; if (Math.abs(S.coins - coinShown) < .5) coinShown = S.coins;
-    coinTxt.textContent = fmt(Math.round(coinShown));
+    setText(coinTxt, fmt(Math.round(coinShown)));
     const n = P.stack.length, c = cap();
-    bagEl.textContent = `🧺 ${n}/${c}`; bagEl.classList.toggle('full', n >= c);
+    setText(bagEl, `🧺 ${n}/${c}`); if (bagEl.classList.contains('full') !== (n >= c)) bagEl.classList.toggle('full', n >= c);
     let html;
     if (ob.text) html = `<span>👉 ${ob.text}</span>`;
+    else if (insp.warning) html = `<span>📋 Inspector checks the ${ICON[insp.stall.product]} stall in <b>${Math.ceil(insp.warning)}s</b>: ${insp.stall.stock}/${gInspect.inspect.min}</span>`;
     else {
       const gs = goals(), cur = gs.find(gl => !gl.done) || gs[gs.length - 1], frac = gs.reduce((a, gl) => a + gl.have / gl.need, 0) / gs.length;
       html = `<span>🎯 ${cur.text} <b>${cur.need > 1 ? fmt(cur.have) + '/' + fmt(cur.need) : ''}</b>${gs.length > 1 ? ` <b>· ${gs.filter(gl => gl.done).length}/${gs.length}</b>` : ''}</span><span class="bar"><i style="width:${100 * frac}%"></i></span>`;
     }
-    timeTxt.textContent = mmss(S.timeLeft); timeEl.classList.toggle('low', S.phase === 'play' && S.timeLeft <= 15);
+    setText(timeTxt, mmss(S.timeLeft)); const low = S.phase === 'play' && S.timeLeft <= 15; if (timeEl.classList.contains('low') !== low) timeEl.classList.toggle('low', low);
     if (html !== questKey) { questKey = html; questEl.innerHTML = html; }
     if (sheetFor) { // re-render only when what you can afford changes, so taps aren't swallowed
       const k = Object.entries(C.upgrades).map(([id, u]) => S.coins >= (u.cost[S.up[id] || 0] ?? Infinity) ? 1 : 0).join('');
@@ -685,10 +862,11 @@ function runLevel(el, n, api) {
     if (document.visibilityState === 'visible' && S.phase === 'play' && !S.paused) update(dt); // the clock stops when the app is hidden
     const t1 = performance.now();
     for (const c of coinsFx) c.t += dt;
-    const tx = P.x - W / T / 2, ty = P.y - H / T / 2 - .8;
-    camX += (tx - camX) * Math.min(1, dt * 7); camY += (ty - camY) * Math.min(1, dt * 7);
+    const tx = P.x + P.vx * .22 - W / T / 2, ty = P.y + P.vy * .22 - H / T / 2 - .8; // look a little ahead
+    camX += (tx - camX) * Math.min(1, dt * 9); camY += (ty - camY) * Math.min(1, dt * 9);
     camX = Math.max(-.3, Math.min(C.world.cols + .3 - W / T, camX)); camY = Math.max(0, Math.min(C.world.rows - H / T, camY));
     if (W / T > C.world.cols) camX = (C.world.cols - W / T) / 2;
+    const px = T * dpr; camX = Math.round(camX * px) / px; camY = Math.round(camY * px) / px; // whole device pixels: no shimmer
     const ob = draw(now); const t2 = performance.now(); hud(ob);
     perf.update += (t1 - t0 - perf.update) * .05; perf.draw += (t2 - t1 - perf.draw) * .05; perf.hud += (performance.now() - t2 - perf.hud) * .05; // running averages (ms)
     raf = requestAnimationFrame(frame);
@@ -696,6 +874,8 @@ function runLevel(el, n, api) {
   function resize() {
     dpr = Math.min(devicePixelRatio || 1, 2); W = root.clientWidth; H = root.clientHeight;
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const cr = coinEl.querySelector('i').getBoundingClientRect(), r0 = root.getBoundingClientRect();
+    coinTarget = { x: cr.left - r0.left + cr.width / 2, y: cr.top - r0.top + cr.height / 2 };
     const nt = Math.round(Math.max(32, Math.min(58, W / 9.5)));
     if (nt !== T || !art) { T = nt; art = createArt(T, dpr); groundCv = art.ground(on); }
   }
@@ -708,7 +888,7 @@ function runLevel(el, n, api) {
   intro();
 
   // handle for the automated checks (scripts/verify.mjs, tests); not used by the game
-  root._dbg = { L, n, goals, focus, go() { el.querySelectorAll('.ov').forEach(o => o.remove()); S.phase = 'play'; }, perf, unlock: id => unlock(TILES.find(u => u.id === id)), S, P, on, cap, fields, pens, machines, stands, crates, helpers, customers, visibleTiles, sinks, sources, save, update, objective, flying, get coins() { return S.coins; }, set coins(v) { S.coins = v; coinShown = v; } };
+  root._dbg = { crows, orders, cart, insp, L, n, goals, focus, go() { el.querySelectorAll('.ov').forEach(o => o.remove()); S.phase = 'play'; }, perf, unlock: id => unlock(TILES.find(u => u.id === id)), S, P, on, cap, fields, pens, machines, stands, crates, helpers, customers, visibleTiles, sinks, sources, save, update, objective, flying, get coins() { return S.coins; }, set coins(v) { S.coins = v; coinShown = v; } };
   raf = requestAnimationFrame(frame);
   return () => {
     dead = true; cancelAnimationFrame(raf); ro.disconnect(); save();
