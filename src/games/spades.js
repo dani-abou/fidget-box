@@ -32,8 +32,8 @@ function shuffleDeal() {
   for (let i = 51; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; }
   return [0, 1, 2, 3].map(p => d.slice(p * 13, p * 13 + 13).sort(cardOrder));
 }
-// Hand order: spades, hearts, clubs, diamonds (alternating colours), low to high.
-const SUIT_POS = [2, 3, 1, 0];
+// Hand order, left to right: diamonds, clubs, hearts, spades; low to high within a suit.
+const SUIT_POS = [1, 0, 2, 3]; // indexed by suit: clubs, diamonds, hearts, spades
 function cardOrder(a, b) { return SUIT_POS[suit(a)] - SUIT_POS[suit(b)] || rank(a) - rank(b); }
 
 export function legal(hand, trick, broken) {
@@ -276,6 +276,8 @@ export default {
 .card{width:var(--cw,56px);height:calc(var(--cw,56px)*1.42);border-radius:9px;background:linear-gradient(180deg,#FFFFFF,#F4EFE3);color:#1E1438;
   border:2.5px solid var(--outline);box-shadow:0 3px 0 rgba(0,0,0,.35);position:relative;display:block;padding:0;font-family:inherit;flex:none;overflow:hidden}
 .card.red{color:#D9343F}
+/* four-colour deck (colorblind setting): every suit its own colour */
+.sp.fourc .card.su0{color:#1E9E55} .sp.fourc .card.su1{color:#2F6FE0} .sp.fourc .card.su2{color:#D9343F} .sp.fourc .card.su3{color:#1E1438}
 .card .r{position:absolute;left:4px;top:1px;font-size:calc(var(--cw,56px)*.44);font-weight:600;line-height:1;letter-spacing:-1px}
 .card .s{position:absolute;left:5px;top:calc(var(--cw,56px)*.45);font-size:calc(var(--cw,56px)*.36);line-height:1}
 .card .pip{position:absolute;right:-6%;bottom:-8%;font-size:calc(var(--cw,56px)*.9);line-height:1;opacity:.95}
@@ -417,7 +419,7 @@ export default {
         if (trickEl.querySelector(`[data-c="${t.c}"]`)) continue;
         const d = document.createElement('div'); d.dataset.c = t.c;
         const mine = t.p === 0 && lastFrom?.c === t.c;
-        d.className = `card t${t.p}${mine ? '' : ' fly'}${RED(t.c) ? ' red' : ''}`; d.setAttribute('aria-label', `${nm(t.p)}: ${cardLabel(t.c)}`); d.innerHTML = cardHTML(t.c);
+        d.className = `card t${t.p}${mine ? '' : ' fly'}${RED(t.c) ? ' red' : ''} su${suit(t.c)}`; d.setAttribute('aria-label', `${nm(t.p)}: ${cardLabel(t.c)}`); d.innerHTML = cardHTML(t.c);
         trickEl.append(d);
         if (mine) { // FLIP: start exactly over the card you played, then glide to the table
           const to = d.getBoundingClientRect(), fr = lastFrom.rect;
@@ -433,6 +435,7 @@ export default {
       }
       msg.textContent = s.phase === 'play' && s.turn === 0 ? (s.trick.length ? 'Your turn' : 'Your lead') : '';
       // your hand along an arc
+      s.hands[0].sort(cardOrder);
       const L = s.phase === 'play' && s.turn === 0 ? legal(s.hands[0], s.trick, s.broken) : [];
       const W = handEl.clientWidth || el.clientWidth, n = s.hands[0].length;
       const cw = Math.round(Math.max(58, Math.min(92, W / 5)));
@@ -444,7 +447,7 @@ export default {
       handEl.innerHTML = '';
       s.hands[0].forEach((c, i) => {
         const b = document.createElement('button'), off = i - (n - 1) / 2;
-        b.className = 'card' + (RED(c) ? ' red' : '') + (L.length ? (L.includes(c) ? ' ok' : ' no') : '');
+        b.className = `card su${suit(c)}` + (RED(c) ? ' red' : '') + (L.length ? (L.includes(c) ? ' ok' : ' no') : '');
         b.innerHTML = cardHTML(c); b.setAttribute('aria-label', cardLabel(c));
         b.style.left = x0 + i * stepX + 'px'; b.style.transform = `rotate(${off * 1.3}deg) translateY(${off * off * .55}px)`; b.style.zIndex = i;
         b.disabled = !L.includes(c); b.dataset.c = c; b.dataset.rest = b.style.transform;
@@ -654,19 +657,27 @@ export default {
       const R = levelRules(s.level);
       panel(el, {
         title: 'Settings', dismissable: true,
-        html: `<p><b>Game to</b> (applies right away)</p><div class="sp-opts">${TARGETS.map(t => `<button class="btn${t === R.target ? ' primary' : ''}" data-t="${t}">${t}</button>`).join('')}</div>` +
+        html: `<p><b>Colorblind cards</b>: every suit its own colour</p><div class="sp-opts sp-4c">${[['on', 'On ♦♣♥♠'], ['off', 'Off']].map(([k, t]) => `<button class="btn${(k === 'on') === fourColor() ? ' primary' : ''}" data-4c="${k}">${t}</button>`).join('')}</div>` +
+          `<p><b>Game to</b> (applies right away)</p><div class="sp-opts">${TARGETS.map(t => `<button class="btn${t === R.target ? ' primary' : ''}" data-t="${t}">${t}</button>`).join('')}</div>` +
           `<p>Level ${s.level} vs ${who[1].icon} ${nm(1)} &amp; ${who[3].icon} ${nm(3)}. Nil is worth 100, made bids 10 a trick, and every 10 overtricks (bags) costs 100.</p>` +
           `<p>Tap your ${YOU.icon} to send an emote.</p>` +
           (s.lastTrick ? `<p>Last trick: ${s.lastTrick.map(t => `${who[t.p].icon} ${RANKS[rank(t.c)]}${SUITS[suit(t.c)]}`).join(', ')}</p>` : ''),
         buttons: [{ label: 'Levels', onClick: pickLevel }, { label: 'Restart', onClick: () => restart(s.level) }, { label: 'Back', primary: true }],
       });
-      el.querySelectorAll('.sp-opts .btn').forEach(b => b.onclick = () => {
+      el.querySelectorAll('.sp-4c .btn').forEach(b => b.onclick = () => {
+        writeSave('spades-4color', b.dataset['4c'] === 'on'); applyColors();
+        el.querySelectorAll('.sp-4c .btn').forEach(o => o.classList.toggle('primary', o === b));
+      });
+      el.querySelectorAll('.sp-opts:not(.sp-4c) .btn').forEach(b => b.onclick = () => {
         writeSave('spades-target', +b.dataset.t);
-        el.querySelectorAll('.sp-opts .btn').forEach(o => o.classList.toggle('primary', o === b));
+        el.querySelectorAll('.sp-opts:not(.sp-4c) .btn').forEach(o => o.classList.toggle('primary', o === b));
         render();
       });
     };
 
+    const fourColor = () => loadSave('spades-4color') ?? true; // on unless switched off
+    const applyColors = () => $('.sp').classList.toggle('fourc', fourColor());
+    applyColors();
     const sp = $('.sp'); sp.addEventListener('scroll', () => { sp.scrollTop = 0; sp.scrollLeft = 0; });
     const ro = new ResizeObserver(() => s && s.hands && render()); ro.observe(handEl);
     // Resume a saved game. A hand that had finished was already scored, so deal the next one.
