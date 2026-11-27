@@ -9,7 +9,7 @@ import { readFile, mkdir } from 'node:fs/promises';
 const svg = await readFile(new URL('./icon.svg', import.meta.url), 'utf8');
 const art = svg.match(/<g id="art">[\s\S]*?<\/g>/)[0];
 const defs = svg.match(/<defs>[\s\S]*?<\/defs>/)[0];
-const BG = '#F2EEFB';
+const BG = '#2A1D58';
 
 // scale: how much of the canvas the artwork uses. Maskable icons must keep
 // everything inside the central 80% circle, so the art is shrunk for them.

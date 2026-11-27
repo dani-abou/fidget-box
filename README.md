@@ -66,14 +66,17 @@ server.mjs                  the static server (cache headers, MIME types, CSP)
    import { P, ACCENTS } from '../lib/palette.js';        // P.acc[0..4], P.ink, P.muted ... for canvas
    import { makeCanvas, rel } from '../lib/canvas.js';    // HiDPI canvas that fills the stage
    import { progress, loadSave, writeSave } from '../lib/progress.js'; // levels + stars, resumable state
-   import { panel, levelPicker, starText } from '../lib/ui.js';      // result panel, level grid
+   import { panel, levelPicker, starsHTML, pills } from '../lib/ui.js'; // result panel, level coins, HUD pills
+   import { confetti, floater, shake } from '../lib/fx.js';          // celebration effects
 
    export default {
      id: 'myid',                       // must match the file name
      name: 'My toy',
      description: 'One line for the home tile.',
-     color: '--mint',                  // a palette var: --sky --mint --lilac --peach --butter
-     icon: '<svg viewBox="0 0 40 40" ...>...</svg>',   // stroke/fill currentColor
+     color: '--mint',                  // a palette var: --sky --mint --lilac --peach --butter --pink
+     icon: '<svg viewBox="0 0 40 40" ...>...</svg>',   // small fallback icon, currentColor
+     art: '<svg viewBox="0 0 100 100" ...>...</svg>',  // optional: the home card illustration
+     levels: 30,                       // optional: shows "Lv" and stars on the home card
      css: `.my-thing{...}`,            // optional; injected once
      init(container) {
        // build UI inside container, call ac() on first touch so sound starts
@@ -88,6 +91,16 @@ That's it. The home tile, the "Three games" count, the service worker's
 precache list and the version all follow automatically. Data files a game
 fetches go in `src/data/` (load them with `new URL('../data/x', import.meta.url)`)
 and get cached for offline use the same way.
+
+## Look and feel
+
+One fixed "arcade at night" theme in `src/styles.css`, not following the
+phone's light/dark setting: a starfield, chunky outlined pieces (3px
+`--outline`, hard drop shadow, light top edge), `.btn` / `.btn.primary` /
+`.ibtn` buttons that press down, `.pill` HUD counters, and panels with a
+ribbon title. `panel(el, { mood: 'win' })` adds confetti, `'lose'` a peach
+ribbon. Each game styles its own scene in its `css` (wooden board, felt
+table, letter tiles) using those tokens.
 
 For levels: `const prog = progress('<id>')`, start at `prog.last`, call
 `prog.complete(n, stars)` on a win (this unlocks `n + 1`), and open

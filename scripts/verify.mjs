@@ -104,9 +104,9 @@ try {
     await page.mouse.move(x + (horiz ? delta * cellPx : 0), y + (horiz ? 0 : delta * cellPx), { steps: 8 }); await page.mouse.up();
     await page.waitForTimeout(150);
   }
-  ok(await page.waitForSelector('.panel h2:has-text("Level 1 cleared")', { timeout: 3000 }).then(() => true, () => false) && (await page.textContent('.panel .big')) === '★★★', 'slide: solving in the minimum shows "Level 1 cleared" with 3 stars');
+  ok(await page.waitForSelector('.panel h2:has-text("Level 1 cleared")', { timeout: 3000 }).then(() => true, () => false) && (await page.locator('.panel .big span.on').count()) === 3, 'slide: solving in the minimum shows "Level 1 cleared" with 3 stars');
   await page.click('.panel .btn.primary'); // next level
-  ok((await page.textContent('#stage .stat')).includes('Level 2'), 'slide: next level loads, progress saved');
+  ok(/Lv\s*2(?!\d)/.test(await page.textContent('#stage .stat')), 'slide: next level loads, progress saved');
   await page.click('#back');
 
   // --- Letter Trail: spell a real word by dragging across the board ---

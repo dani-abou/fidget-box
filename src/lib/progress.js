@@ -10,6 +10,7 @@ export function progress(id) {
     get unlocked() { return p.unlocked; },
     get last() { return Math.min(p.last || 1, p.unlocked); },
     stars: n => p.stars[n] || 0,
+    get totalStars() { return Object.values(p.stars).reduce((a, b) => a + b, 0); },
     play(n) { p.last = n; write(k, p); },
     /** Record a finished level; unlocks the next. */
     complete(n, stars = 1) {

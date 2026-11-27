@@ -2,7 +2,9 @@
 // chips, and the service-worker update toast. Game logic lives in games/.
 import ids from './games/registry.js';
 import { settings, setSetting } from './lib/settings.js';
-import { ac, buzz } from './lib/sound.js';
+import { ac, buzz, click } from './lib/sound.js';
+import { progress } from './lib/progress.js';
+import { pills } from './lib/ui.js';
 import { readPal } from './lib/palette.js';
 
 const VERSION = '__BUILD_VERSION__'; // replaced by build.mjs with the content hash
@@ -34,14 +36,26 @@ $('sub').textContent = `${WORDS[mods.length] ?? mods.length} game${mods.length =
 $('ver').textContent = 'v' + VERSION;
 
 const tiles = $('tiles');
-for (const g of mods) {
+mods.forEach((g, i) => {
   const b = document.createElement('button');
-  b.className = 'tile'; b.dataset.go = g.id; b.style.setProperty('--c', `var(${g.color})`);
-  b.innerHTML = `${g.icon}<span class="name"></span><span class="desc"></span>`;
+  b.className = 'tile'; b.dataset.go = g.id; b.style.setProperty('--c', `var(${g.color})`); b.style.setProperty('--i', i);
+  b.innerHTML = `<span class="art" aria-hidden="true">${g.art || g.icon}</span><span class="txt"><span class="name"></span><span class="desc"></span><span class="meta"></span></span>`;
   b.querySelector('.name').textContent = g.name; b.querySelector('.desc').textContent = g.description;
   b.onclick = () => { ac(); location.hash = g.id; };
   tiles.append(b);
+});
+// Level and stars on each card; refreshed whenever the home screen shows.
+function refreshTiles() {
+  for (const g of mods) {
+    if (!g.levels) continue;
+    const pr = progress(g.id);
+    tiles.querySelector(`[data-go="${g.id}"] .meta`).innerHTML =
+      pills([{ label: 'Level', value: Math.min(pr.unlocked, g.levels), cls: 'lvl' }, { value: `★ ${pr.totalStars}<i>/${g.levels * 3}</i>`, cls: 'star' }]);
+  }
 }
+
+// A soft tick on every chunky button, so the UI feels like a game.
+document.addEventListener('pointerdown', e => { if (e.target.closest('.btn:not(:disabled),.ibtn,.tile,.lv:not(:disabled)')) { ac(); click(1250, .018, .09, 'triangle'); } });
 
 /* ---------- router ---------- */
 const toast = $('toast');
@@ -54,7 +68,7 @@ function route() {
   stage.innerHTML = '';
   const g = games.get(location.hash.slice(1)); readPal();
   if (g) { home.hidden = true; play.hidden = false; back.hidden = false; title.textContent = g.name; cleanup = g.init(stage) || null; }
-  else { home.hidden = false; play.hidden = true; back.hidden = true; title.textContent = ''; }
+  else { home.hidden = false; play.hidden = true; back.hidden = true; title.textContent = ''; refreshTiles(); }
   syncToast();
 }
 back.onclick = () => { location.hash = ''; };

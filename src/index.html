@@ -5,13 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Fidget Box</title>
 <meta name="description" content="Puzzle and card games for the ride. No ads, ever. Works offline.">
-<meta name="theme-color" content="#F2EEFB" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#1E1B30" media="(prefers-color-scheme: dark)">
-<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#140F2A">
+<meta name="color-scheme" content="dark">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Fidget Box">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
@@ -23,16 +22,16 @@
 <body>
 <div id="app">
   <header>
-    <button id="back" class="hbtn" hidden aria-label="Back to all games">‹ All games</button>
+    <button id="back" class="ibtn" hidden aria-label="Back to all games"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
     <span id="title"></span>
     <span class="spacer"></span>
-    <button id="snd" class="chip" aria-pressed="true">Sound</button>
-    <button id="vib" class="chip" aria-pressed="true">Buzz</button>
+    <button id="snd" class="ibtn" aria-pressed="true" aria-label="Sound"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="on" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="off" d="M17 9l5 6M22 9l-5 6"/></svg></button>
+    <button id="vib" class="ibtn" aria-pressed="true" aria-label="Buzz (vibration)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="18" rx="2"/><path class="on" d="M4 8v8M20 8v8M1.5 10v4M22.5 10v4"/><path class="off" d="M3 3l18 18"/></svg></button>
   </header>
 
   <main>
   <section id="home">
-    <h1>Fidget Box</h1>
+    <div class="logo"><h1 aria-label="Fidget Box"><span style="--c:var(--peach);--i:0">Fidget</span><span style="--c:var(--butter);--i:1">Box</span></h1></div>
     <p class="sub" id="sub">Games for the ride. No ads, ever.</p>
     <div class="tiles" id="tiles"></div>
     <p class="ver" id="ver"></p>
