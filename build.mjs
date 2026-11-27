@@ -54,6 +54,12 @@ export async function build() {
   const out = files.map(rel);
   const precache = ['./', ...out.filter(f => f !== 'sw.js' && f !== 'index.html'), 'index.html'].map(f => f === './' ? f : './' + f);
 
+  // Icons get a content fingerprint in their URLs (icons/x.png?v=hash) in the page and manifest, so a new
+  // icon is a new address: phones can't keep showing a cached old one when you add the app.
+  const iconHash = {};
+  for (const f of files) if (rel(f).startsWith('icons/')) iconHash[rel(f)] = createHash('sha256').update(contents.get(f)).digest('hex').slice(0, 8);
+  const stampIcons = txt => txt.replace(/icons\/([\w.-]+\.png)/g, (m, name) => iconHash['icons/' + name] ? `${m}?v=${iconHash['icons/' + name]}` : m);
+
   await rm(DIST, { recursive: true, force: true });
   for (const f of files) {
     const dest = join(DIST, rel(f));
@@ -62,6 +68,7 @@ export async function build() {
     if (TEXT.test(f)) {
       let s = data.toString('utf8').replaceAll('__BUILD_VERSION__', version);
       if (rel(f) === 'sw.js') s = s.replace('__PRECACHE_LIST__', JSON.stringify(precache, null, 2));
+      if (rel(f) === 'index.html' || rel(f) === 'manifest.webmanifest') s = stampIcons(s);
       data = s;
     }
     await writeFile(dest, data);

@@ -17,8 +17,9 @@ const MIME = {
 };
 // sw.js, the page and the manifest must always be revalidated so updates are seen.
 // Everything else revalidates too (cheap 304s); the service worker serves it offline.
-// Fonts and icons rarely change, so they may sit in the HTTP cache for a day.
-const cacheControl = p => /^\/(fonts|icons)\//.test(p) ? 'public, max-age=86400' : 'no-cache';
+// Fonts rarely change, so they may sit in the HTTP cache for a day. Icons are revalidated like everything
+// else (their URLs also carry a content fingerprint, see build.mjs), so a new app icon is never stale.
+const cacheControl = p => /^\/fonts\//.test(p) ? 'public, max-age=86400' : 'no-cache';
 
 const SECURITY = {
   // Enforces "no third-party network calls": the page can only talk to this origin.
