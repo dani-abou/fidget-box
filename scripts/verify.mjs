@@ -134,7 +134,13 @@ try {
 
   // --- Spades: bid, play three tricks, then reload and resume the same hand ---
   await page.click('.tile[data-go="spades"]');
-  await page.waitForSelector('.sp-bidgo', { timeout: 12000 }); await page.click('.sp-bidgo');
+  await page.waitForSelector('.sp-bidgo', { timeout: 12000 });
+  { // slide the bid picker: dragging left by ~3 numbers' width raises the bid from 1 to 4
+    const bb = await page.locator('.sp-step .cur').boundingBox(), y = bb.y + bb.height / 2;
+    await page.mouse.move(bb.x + bb.width / 2, y); await page.mouse.down(); await page.mouse.move(bb.x + bb.width / 2 - 80, y, { steps: 8 }); await page.mouse.up();
+    ok((await page.textContent('.sp-step .cur')) === '4', `spades: sliding the bid picker changes the bid (1 -> ${await page.textContent('.sp-step .cur')})`);
+  }
+  await page.click('.sp-bidgo');
   // cards are fanned, so tap each card's visible left strip like a thumb would
   for (let t = 0; t < 3; t++) { await page.waitForSelector('.sp-hand .card.ok', { timeout: 12000 }); await page.locator('.sp-hand .card.ok').first().click({ position: { x: 16, y: 55 } }); }
   const handBefore = await page.locator('.sp-hand .card').count();

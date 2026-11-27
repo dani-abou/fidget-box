@@ -300,7 +300,9 @@ export default {
 .sp-bidov .panel{max-width:236px;padding:24px 12px 12px}
 .sp-bidov .panel h2{font-size:17px;padding:4px 16px}
 .sp-bidov .sp-bidq{font-size:15px;margin:0 0 4px}
-.sp-bidov .sp-step{gap:2px;margin:2px 0}
+.sp-bidov .sp-step{gap:2px;margin:2px 0;touch-action:none;cursor:grab}
+.sp-step .cur{transition:transform .15s}
+.sp-step .side{cursor:pointer}
 .sp-bidov .sp-step button.arrow{width:30px;height:48px;font-size:28px}
 .sp-bidov .sp-step .side{width:30px;font-size:17px}
 .sp-bidov .sp-step .cur{width:64px;height:72px;font-size:44px;border-radius:14px}
@@ -463,6 +465,29 @@ export default {
       };
       ov.querySelector('.prev').onclick = () => { v = Math.max(0, v - 1); click(700 + v * 30, .02, .12, 'triangle'); buzz(4); show(); };
       ov.querySelector('.next').onclick = () => { v = Math.min(13, v + 1); click(700 + v * 30, .02, .12, 'triangle'); buzz(4); show(); };
+      // Slide to pick: drag the number row like a wheel (left = higher). Tapping a side number picks it.
+      const stepEl = ov.querySelector('.sp-step'), curEl = ov.querySelector('.cur'), STEP = 26;
+      let sx = null, base = 0, moved = false, downOn = null;
+      stepEl.addEventListener('pointerdown', e => {
+        if (e.target.closest('.arrow')) return;
+        sx = e.clientX; base = v; moved = false; downOn = e.target; stepEl.setPointerCapture(e.pointerId); // capture retargets pointerup, so remember what was touched curEl.style.transition = 'none';
+      });
+      stepEl.addEventListener('pointermove', e => {
+        if (sx === null) return;
+        const dx = e.clientX - sx; if (Math.abs(dx) > 6) moved = true;
+        const nv = Math.max(0, Math.min(13, base + Math.round(-dx / STEP)));
+        if (nv !== v) { v = nv; click(700 + v * 30, .02, .12, 'triangle'); buzz(3); show(); }
+        const rest = (-dx / STEP) - (v - base); // how far between numbers, for a little follow-the-finger
+        curEl.style.transform = `translateX(${Math.max(-1, Math.min(1, -rest)) * 10}px)`;
+      });
+      const release = () => {
+        if (sx === null) return; sx = null; curEl.style.transition = ''; curEl.style.transform = '';
+        if (!moved) { // a tap on a side number selects it
+          if (downOn.closest('.lo') && v > 0) { v--; click(700 + v * 30, .02, .12, 'triangle'); show(); }
+          if (downOn.closest('.hi') && v < 13) { v++; click(700 + v * 30, .02, .12, 'triangle'); show(); }
+        }
+      };
+      stepEl.addEventListener('pointerup', release); stepEl.addEventListener('pointercancel', release);
       ov.querySelector('.sp-bidgo').onclick = () => {
         ac(); closePanel(); closePanel = null;
         s.bids[0] = v; s.turn = 1; click(900, .03, .2, 'triangle'); save(); render();
