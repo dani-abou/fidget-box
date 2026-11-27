@@ -1,7 +1,19 @@
 # Fidget Box
 
-Ad-free fidget toys (bubble wrap, spinner, switchboard, ripples, dot field) as
-an installable PWA that works fully offline. No dependencies, no bundler, no
+Ad-free games with levels, as an installable PWA that works fully offline:
+
+- **Slide Free**: slide blocks aside to get the coral block out. 60 levels,
+  from 2 to 45 moves; each level's minimum is proven by a solver, and
+  matching it earns three stars.
+- **Spades**: you and an AI partner against two AI opponents. Each level is
+  one game to a target score (200, then 250, then 300). Opponents get
+  sharper every level: fewer slips, card counting, ducking bags, attacking
+  nil. The game is saved after every card.
+- **Letter Trail**: drag across touching letters to make words before time
+  runs out. 30 levels with rising targets and shorter clocks, and a 5x5 board
+  from level 13. Boards are pre-solved, so every target is reachable.
+
+The app has no dependencies or bundler, and makes no analytics or other-domain requests. No dependencies, no bundler, no
 analytics, and no requests to any other domain. The server's
 Content-Security-Policy blocks them even if one slipped in.
 
@@ -13,8 +25,11 @@ Needs Node 20+. There is nothing to `npm install`.
 npm run dev      # build, serve on http://localhost:3000, rebuild on every save
 npm run build    # src/ -> dist/ (what Railway runs)
 npm start        # serve dist/ (PORT env var, default 3000)
-npm run verify   # headless-Chromium check: offline, every game, update toast, installability
+npm test         # game logic, no browser: Spades rules/scoring/AI, word boards, slide levels
+npm run verify   # npm test + headless Chromium: offline, plays each game, update toast, installability
 npm run icons    # re-render src/icons/*.png from scripts/icon.svg (only if the art changes)
+npm run levels   # regenerate src/data/slide-levels.json (~5 min; output is committed)
+npm run words    # regenerate src/data/words.txt (needs `npm i --no-save wordlist-english`)
 ```
 
 `verify` and `icons` need Playwright (`npm i -g playwright && npx playwright install chromium`).
@@ -30,7 +45,10 @@ toast after every save, which is the update flow working.
 src/
   index.html, styles.css    shell markup and shared styles (palette, header, tiles, toast)
   app.js                    home screen, router, Sound/Buzz chips, update toast
-  lib/                      settings, sound + haptics, palette, canvas helpers
+  lib/                      settings, sound + haptics, palette, canvas helpers,
+                            progress.js (levels unlocked, stars, saved games),
+                            ui.js (result panels, level picker)
+  data/                     slide-levels.json, words.txt (+ licence)
   games/registry.js         the list of game ids, in home-screen order
   games/<id>.js             one file per game
   sw.js                     service worker template (build fills in version + file list)
@@ -47,6 +65,8 @@ server.mjs                  the static server (cache headers, MIME types, CSP)
    import { ac, buzz, click, sfxPop, tone } from '../lib/sound.js';
    import { P, ACCENTS } from '../lib/palette.js';        // P.acc[0..4], P.ink, P.muted ... for canvas
    import { makeCanvas, rel } from '../lib/canvas.js';    // HiDPI canvas that fills the stage
+   import { progress, loadSave, writeSave } from '../lib/progress.js'; // levels + stars, resumable state
+   import { panel, levelPicker, starText } from '../lib/ui.js';      // result panel, level grid
 
    export default {
      id: 'myid',                       // must match the file name
@@ -64,8 +84,14 @@ server.mjs                  the static server (cache headers, MIME types, CSP)
 
 2. Add `'myid',` to `src/games/registry.js`.
 
-That's it. The home tile, the "Five little toys" count, the service worker's
-precache list and the version all follow automatically. The build fails if
+That's it. The home tile, the "Three games" count, the service worker's
+precache list and the version all follow automatically. Data files a game
+fetches go in `src/data/` (load them with `new URL('../data/x', import.meta.url)`)
+and get cached for offline use the same way.
+
+For levels: `const prog = progress('<id>')`, start at `prog.last`, call
+`prog.complete(n, stars)` on a win (this unlocks `n + 1`), and open
+`levelPicker(el, { count, prog, onPick })` from a Levels button. The build fails if
 the registry names a file that doesn't exist or a game is missing a field. It
 warns if a game file isn't in the registry.
 

@@ -10,6 +10,9 @@
     "start": "node server.mjs",
     "dev": "node server.mjs --dev",
     "icons": "node scripts/make-icons.mjs",
-    "verify": "node build.mjs && node scripts/verify.mjs"
+    "test": "node tests/sim.mjs",
+    "verify": "node build.mjs && node tests/sim.mjs && node scripts/verify.mjs",
+    "levels": "node scripts/make-slide-levels.mjs",
+    "words": "node scripts/make-words.mjs"
   }
 }

@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Fidget Box",
   "short_name": "Fidget Box",
-  "description": "Little fidget toys for the ride. No ads, ever. Works offline.",
+  "description": "Puzzle and card games for the ride. No ads, ever. Works offline.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

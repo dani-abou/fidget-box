@@ -30,7 +30,7 @@ for (const g of mods) {
 }
 
 const WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve'];
-$('sub').textContent = `${WORDS[mods.length] ?? mods.length} little toy${mods.length === 1 ? '' : 's'} for the ride. No ads, ever.`;
+$('sub').textContent = `${WORDS[mods.length] ?? mods.length} game${mods.length === 1 ? '' : 's'} for the ride. No ads, ever.`;
 $('ver').textContent = 'v' + VERSION;
 
 const tiles = $('tiles');

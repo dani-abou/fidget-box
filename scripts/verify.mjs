@@ -8,6 +8,7 @@
 // Runs against a temporary copy of the project, so src/ is never modified.
 import { createRequire } from 'node:module';
 import { cp, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -17,6 +18,42 @@ const { chromium } = createRequire(import.meta.url)('playwright');
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = 4400 + Math.floor(Math.random() * 500);
 const ORIGIN = `http://localhost:${PORT}`;
+// Shortest solution for a Slide Free level: [[blockIndex, cellsToMove, horizontal], ...]
+function solveSlide(blocks) {
+  const N = 6, bl = blocks.map(([r, c, len, d]) => ({ r, c, len, h: d === 'h' })), start = bl.map(b => b.h ? b.c : b.r);
+  const prev = new Map([[start.join(), null]]); let q = [start], goal = null;
+  while (q.length && !goal) {
+    const next = [];
+    for (const s of q) {
+      if (s[0] === N - 2) { goal = s; break; }
+      const occ = new Set(); bl.forEach((b, j) => { for (let k = 0; k < b.len; k++) occ.add(b.h ? b.r * N + s[j] + k : (s[j] + k) * N + b.c); });
+      bl.forEach((b, j) => {
+        const cell = p => b.h ? b.r * N + p : p * N + b.c, add = to => { const t = [...s]; t[j] = to; if (!prev.has(t.join())) { prev.set(t.join(), [s, j, to - s[j], b.h]); next.push(t); } };
+        for (let p = s[j] - 1; p >= 0 && !occ.has(cell(p)); p--) add(p);
+        for (let p = s[j] + b.len; p < N && !occ.has(cell(p)); p++) add(p - b.len + 1);
+      });
+    }
+    q = next;
+  }
+  const moves = []; for (let k = goal.join(); prev.get(k); ) { const [s, j, d, h] = prev.get(k); moves.unshift([j, d, h]); k = s.join(); }
+  return moves;
+}
+// A common dictionary word on a Letter Trail board, with the cells to drag through.
+function findWordPath(cells, size) {
+  const text = readFileSync(join(root, 'src/data/words.txt'), 'utf8'); const common = new Set(text.split('\n#\n')[0].split('\n'));
+  const pre = new Set(); for (const w of common) for (let i = 1; i < w.length; i++) pre.add(w.slice(0, i));
+  let best = null; const used = [];
+  const go = (i, w) => {
+    w += cells[i]; used.push(i);
+    if (w.length >= 4 && common.has(w) && (!best || w.length > best.word.length)) best = { word: w, cells: [...used] };
+    if (pre.has(w)) { const r = Math.floor(i / size), c = i % size;
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) { const rr = r + dr, cc = c + dc, j = rr * size + cc;
+        if ((dr || dc) && rr >= 0 && cc >= 0 && rr < size && cc < size && !used.includes(j)) go(j, w); } }
+    used.pop();
+  };
+  for (let i = 0; i < cells.length; i++) go(i, '');
+  return best;
+}
 let failures = 0;
 const ok = (cond, msg) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${msg}`); if (!cond) failures++; };
 
@@ -46,53 +83,56 @@ try {
   // ---- 2. offline ----
   await ctx.setOffline(true);
   await page.reload();
-  ok(await page.locator('.tile').count() === 5, 'offline reload: home screen with 5 tiles');
+  ok(await page.locator('.tile').count() === 3, 'offline reload: home screen with 3 games');
   ok(await page.evaluate(() => document.getElementById('home').getBoundingClientRect().height > innerHeight * .8), 'home screen fills the height (hidden play area takes no space)');
   ok(await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('600 20px Fredoka'); }), 'offline reload: Fredoka font loaded from cache');
   const cold = watch(await ctx.newPage());
-  await cold.goto(ORIGIN + '/?source=homescreen#spinner');
-  ok((await cold.textContent('#title')) === 'Spinner', 'offline cold start of a new tab (like launching from the home screen)');
+  await cold.goto(ORIGIN + '/?source=homescreen#slide');
+  ok((await cold.textContent('#title')) === 'Slide Free', 'offline cold start of a new tab (like launching from the home screen)');
   await cold.close();
 
-  const stage = async () => (await page.locator('#stage').boundingBox());
-  const drag = async (pts) => {
-    await page.mouse.move(pts[0][0], pts[0][1]); await page.mouse.down();
-    for (const [x, y] of pts.slice(1)) await page.mouse.move(x, y, { steps: 4 });
-    await page.mouse.up();
-  };
-  const canvasInk = () => page.evaluate(() => {
-    const c = document.querySelector('#stage canvas'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-    let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n;
-  });
+  // --- Slide Free: solve level 1 by dragging blocks along a BFS solution ---
+  await page.click('.tile[data-go="slide"]'); await page.waitForSelector('.sf-b');
+  const lv1 = JSON.parse(await readFile(join(work, 'src/data/slide-levels.json'), 'utf8'))[0];
+  const sol = solveSlide(lv1.blocks);
+  ok(sol.length === lv1.min, `slide: level 1 needs ${lv1.min} moves (solver agrees: ${sol.length})`);
+  const cellPx = (await page.locator('.sf-board').boundingBox()).width / 6;
+  for (const [j, delta, horiz] of sol) {
+    const bb = await page.locator('.sf-b').nth(j).boundingBox();
+    const x = bb.x + Math.min(bb.width, cellPx) / 2, y = bb.y + Math.min(bb.height, cellPx) / 2;
+    await page.mouse.move(x, y); await page.mouse.down();
+    await page.mouse.move(x + (horiz ? delta * cellPx : 0), y + (horiz ? 0 : delta * cellPx), { steps: 8 }); await page.mouse.up();
+    await page.waitForTimeout(150);
+  }
+  ok(await page.waitForSelector('.panel h2:has-text("Level 1 cleared")', { timeout: 3000 }).then(() => true, () => false) && (await page.textContent('.panel .big')) === '★★★', 'slide: solving in the minimum shows "Level 1 cleared" with 3 stars');
+  await page.click('.panel .btn.primary'); // next level
+  ok((await page.textContent('#stage .stat')).includes('Level 2'), 'slide: next level loads, progress saved');
+  await page.click('#back');
 
-  await page.click('.tile[data-go="bubbles"]'); await page.waitForTimeout(150);
-  const sb = await page.locator('.sheet').boundingBox();
-  const row = await page.locator('.bub').nth(0).boundingBox(); // aim through a row's centre, not the gap
-  await drag([[sb.x + 30, row.y + row.height / 2], [sb.x + sb.width - 30, row.y + row.height / 2]]);
-  ok(await page.locator('.bub.popped').count() >= 3, `bubbles: dragging popped ${await page.locator('.bub.popped').count()} bubbles (${await page.textContent('.count')})`);
-  await page.click('.btn'); ok(await page.locator('.bub.popped').count() === 0, 'bubbles: New sheet resets');
+  // --- Letter Trail: spell a real word by dragging across the board ---
+  await page.click('.tile[data-go="words"]'); await page.waitForSelector('.lt-cell');
+  const cells = await page.$$eval('.lt-cell', es => es.map(e => e.textContent.toLowerCase()));
+  const path = findWordPath(cells, Math.sqrt(cells.length));
+  ok(!!path, `words: found "${path?.word}" on the board`);
+  const centre = async i => { const bb = await page.locator('.lt-cell').nth(i).boundingBox(); return [bb.x + bb.width / 2, bb.y + bb.height / 2]; };
+  let [x0, y0] = await centre(path.cells[0]); await page.mouse.move(x0, y0); await page.mouse.down();
+  for (const i of path.cells.slice(1)) { const [x, y] = await centre(i); await page.mouse.move(x, y, { steps: 6 }); }
+  await page.mouse.up();
+  ok(/\+\d/.test(await page.textContent('.lt-word')) && await page.locator('.lt-found span').count() === 1, `words: "${path.word}" scored (${(await page.textContent('#stage .stat')).trim()})`);
+  await page.click('#stage .stop');
+  ok(await page.waitForSelector('.panel h2', { timeout: 3000 }).then(() => true, () => false), 'words: Finish shows the result panel');
+  await page.click('#back');
 
-  await page.click('#back'); await page.click('.tile[data-go="spinner"]'); await page.waitForTimeout(100);
-  let b = await stage(); const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
-  await drag([[cx + 100, cy], [cx, cy + 100], [cx - 100, cy], [cx, cy - 100]]);
-  await page.waitForTimeout(200);
-  ok(/rpm/.test(await page.textContent('#stage .bar')), `spinner: flick spins it (${(await page.textContent('#stage .bar')).trim()})`);
-
-  await page.click('#back'); await page.click('.tile[data-go="switches"]');
-  await page.click('.tg >> nth=0'); ok((await page.getAttribute('.tg >> nth=0', 'aria-pressed')) === 'true', 'switchboard: toggle flips');
-  await page.locator('.key').first().dispatchEvent('pointerdown'); ok(await page.locator('.key.down').count() === 1, 'switchboard: key presses down');
-  await page.locator('.key').first().dispatchEvent('pointerup');
-  await page.fill('.notch', '20'); ok((await page.inputValue('.notch')) === '20', 'switchboard: notched slider moves');
-
-  await page.click('#back'); await page.click('.tile[data-go="ripples"]'); await page.waitForTimeout(100);
-  b = await stage(); await drag([[b.x + 50, b.y + 100], [b.x + 200, b.y + 300], [b.x + 300, b.y + 500]]);
-  ok(await canvasInk() > 100, 'ripples: touch draws rings');
-
-  await page.click('#back'); await page.click('.tile[data-go="dots"]'); await page.waitForTimeout(150);
-  b = await stage(); const before = await canvasInk();
-  await drag([[b.x + 50, b.y + 200], [b.x + 300, b.y + 400]]);
-  ok(before > 100, 'dots: grid drawn'); await page.click('#stage .btn');
-  ok((await page.textContent('#stage .btn')) === 'Mode: pull', 'dots: push/pull toggles');
+  // --- Spades: bid, play three tricks, then reload and resume the same hand ---
+  await page.click('.tile[data-go="spades"]');
+  await page.waitForSelector('.sp-bids .btn.primary', { timeout: 10000 }); await page.click('.sp-bids .btn.primary');
+  for (let t = 0; t < 3; t++) { await page.waitForSelector('.sp-hand .card.ok', { timeout: 12000 }); await page.locator('.sp-hand .card.ok').first().click(); }
+  const handBefore = await page.locator('.sp-hand .card').count();
+  const wonBefore = await page.$$eval('.sp-seat', es => es.map(e => e.textContent).join('|'));
+  ok(handBefore === 10, `spades: played 3 cards legally (${handBefore} left in hand)`);
+  await page.reload(); await page.waitForSelector('.sp-hand .card');
+  const handAfter = await page.locator('.sp-hand .card').count();
+  ok(handAfter === handBefore && (await page.textContent('#title')) === 'Spades', `spades: reload (offline) resumes the same hand (${handBefore} -> ${handAfter} cards)`);
   await page.click('#back');
   ok(errors.length === 0, `no page errors while offline${errors.length ? ': ' + errors.join(' | ') : ''}`);
 
@@ -101,7 +141,7 @@ try {
   const appJs = join(work, 'src/app.js');
   await writeFile(appJs, (await readFile(appJs, 'utf8')).replace('for the ride.', 'for the journey.'));
   ok(await waitFor(async () => !(await fetch(ORIGIN + '/sw.js').then(r => r.text())).includes(v1.slice(1))), 'rebuild produced a new sw.js version');
-  await page.click('.tile[data-go="spinner"]');
+  await page.click('.tile[data-go="slide"]');
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); // app came back to the foreground
   await page.waitForFunction(async () => !!(await navigator.serviceWorker.getRegistration()).waiting, null, { timeout: 10000 });
   ok(!(await page.locator('#toast.show').count()), 'update downloaded, toast held back while a game is open');
