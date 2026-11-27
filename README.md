@@ -1,11 +1,21 @@
 # Fidget Box
 
-Ad-free games with levels, as an installable PWA that works fully offline:
+Ad-free games, as an installable PWA that works fully offline:
+
+- **Tiny Inn**: run a little hotel. Drag anywhere to walk. Check guests in
+  at the desk, walk over the cash, clean messy rooms (run over the trash, bin
+  it, make the bed), and spend cash on build pads: rooms, a clerk,
+  housekeepers, a janitor, vending, big arms, fast shoes, a lounge, luxury
+  beds. Everything you can build is one entry in `BUILDS` in
+  `src/games/hotel.js`; staff behaviour is in the same file. Saved as you play.
 
 - **Slide Free**: slide blocks aside to get the coral block out. 60 levels,
   from 2 to 45 moves; each level's minimum is proven by a solver, and
   matching it earns three stars.
-- **Spades**: you and an AI partner against two AI opponents. Each level is
+- **Spades**: you and Ollie the owl against a new pair of animal rivals each
+  level, on a felt table with a fanned hand. Players react with speech
+  bubbles (trumps, broken nils, sets, bags, wins); tap your own face to send
+  an emote. Each level is
   one game to a target score (200, then 250, then 300). Opponents get
   sharper every level: fewer slips, card counting, ducking bags, attacking
   nil. The game is saved after every card.
@@ -77,6 +87,7 @@ server.mjs                  the static server (cache headers, MIME types, CSP)
      icon: '<svg viewBox="0 0 40 40" ...>...</svg>',   // small fallback icon, currentColor
      art: '<svg viewBox="0 0 100 100" ...>...</svg>',  // optional: the home card illustration
      levels: 30,                       // optional: shows "Lv" and stars on the home card
+     meta: () => pills([...]),         // optional instead of levels: your own home-card summary
      css: `.my-thing{...}`,            // optional; injected once
      init(container) {
        // build UI inside container, call ac() on first touch so sound starts

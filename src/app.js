@@ -47,6 +47,7 @@ mods.forEach((g, i) => {
 // Level and stars on each card; refreshed whenever the home screen shows.
 function refreshTiles() {
   for (const g of mods) {
+    if (g.meta) { tiles.querySelector(`[data-go="${g.id}"] .meta`).innerHTML = g.meta(); continue; } // a game's own summary
     if (!g.levels) continue;
     const pr = progress(g.id);
     tiles.querySelector(`[data-go="${g.id}"] .meta`).innerHTML =

@@ -83,7 +83,7 @@ try {
   // ---- 2. offline ----
   await ctx.setOffline(true);
   await page.reload();
-  ok(await page.locator('.tile').count() === 3, 'offline reload: home screen with 3 games');
+  ok(await page.locator('.tile').count() === 4, 'offline reload: home screen with 4 games');
   ok(await page.evaluate(() => document.getElementById('home').getBoundingClientRect().height > innerHeight * .8), 'home screen fills the height (hidden play area takes no space)');
   ok(await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('600 20px Fredoka'); }), 'offline reload: Fredoka font loaded from cache');
   const cold = watch(await ctx.newPage());
@@ -123,10 +123,20 @@ try {
   ok(await page.waitForSelector('.panel h2', { timeout: 3000 }).then(() => true, () => false), 'words: Finish shows the result panel');
   await page.click('#back');
 
+  // --- Tiny Inn: walk with the keyboard, then check a guest in at the desk ---
+  await page.click('.tile[data-go="hotel"]'); await page.waitForFunction(() => document.querySelector('.ht')?._dbg, null, { timeout: 5000 });
+  const hx = await page.evaluate(() => document.querySelector('.ht')._dbg.P.x);
+  await page.keyboard.down('ArrowRight'); await page.waitForTimeout(600); await page.keyboard.up('ArrowRight');
+  ok(await page.evaluate(x => document.querySelector('.ht')._dbg.P.x > x + .8, hx), 'hotel: player walks');
+  await page.evaluate(() => { const d = document.querySelector('.ht')._dbg; d.P.x = 3.5; d.P.y = 18.4; });
+  ok(await page.waitForFunction(() => document.querySelector('.ht')._dbg.piles.desk > 0, null, { timeout: 15000 }).then(() => true, () => false), 'hotel: standing at the desk checks a guest in (cash on the desk)');
+  await page.click('#back');
+
   // --- Spades: bid, play three tricks, then reload and resume the same hand ---
   await page.click('.tile[data-go="spades"]');
-  await page.waitForSelector('.sp-bids .btn.primary', { timeout: 10000 }); await page.click('.sp-bids .btn.primary');
-  for (let t = 0; t < 3; t++) { await page.waitForSelector('.sp-hand .card.ok', { timeout: 12000 }); await page.locator('.sp-hand .card.ok').first().click(); }
+  await page.waitForSelector('.sp-bidgo', { timeout: 12000 }); await page.click('.sp-bidgo');
+  // cards are fanned, so tap each card's visible left strip like a thumb would
+  for (let t = 0; t < 3; t++) { await page.waitForSelector('.sp-hand .card.ok', { timeout: 12000 }); await page.locator('.sp-hand .card.ok').first().click({ position: { x: 16, y: 55 } }); }
   const handBefore = await page.locator('.sp-hand .card').count();
   const wonBefore = await page.$$eval('.sp-seat', es => es.map(e => e.textContent).join('|'));
   ok(handBefore === 10, `spades: played 3 cards legally (${handBefore} left in hand)`);
