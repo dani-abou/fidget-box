@@ -11,6 +11,18 @@ const VERSION = '__BUILD_VERSION__'; // replaced by build.mjs with the content h
 const $ = id => document.getElementById(id);
 const home = $('home'), play = $('play'), stage = $('stage'), back = $('back'), title = $('title');
 
+/* ---------- home-screen app: fill the whole screen (iOS reports a viewport short of it) ---------- */
+const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+if (standalone) {
+  document.documentElement.classList.add('standalone');
+  const fit = () => {
+    const portrait = matchMedia('(orientation: portrait)').matches;
+    const full = Math.max(innerHeight, document.documentElement.clientHeight, portrait ? Math.max(screen.height, screen.width) : Math.min(screen.height, screen.width));
+    document.documentElement.style.setProperty('--screen-h', full + 'px');
+  };
+  fit(); addEventListener('resize', fit); addEventListener('orientationchange', () => setTimeout(fit, 300));
+}
+
 /* ---------- iOS: block pinch zoom (Safari ignores user-scalable=no) ---------- */
 for (const t of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(t, e => e.preventDefault(), { passive: false });
 document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
