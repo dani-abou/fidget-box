@@ -5,9 +5,11 @@ Ad-free games, as an installable PWA that works fully offline:
 - **Sunny Acres**: an arcade-idle farm in 12 timed levels. Drag anywhere to
   walk; everything happens by walking onto things. Pick crops (they stack on
   your back), stock the market stalls, work the register, and stand on price
-  tiles to build. Each level hands you a farm, a few things to build, a goal
-  (earn, sell, serve or build) and a clock; finish with time to spare for
-  stars. See [Sunny Acres: balancing](#sunny-acres-balancing) below.
+  tiles to build. Each level hands you a farm, a few things to build, goals
+  and a clock: fill the festival cart, fill VIP special orders before they
+  lose patience, shoo crows off ripe crops, keep a happy-customer streak,
+  pass a stall inspection, or sell, earn and build. Finish with time to spare
+  for stars. See [Sunny Acres: balancing](#sunny-acres-balancing) below.
 - **Tiny Inn**: run a little hotel. Drag anywhere to walk. Check guests in
   at the desk, walk over the cash, clean messy rooms (run over the trash, bin
   it, make the bed), and spend cash on build pads: rooms, a clerk,
@@ -165,7 +167,8 @@ limit. Limits are set to about 1.7x the bot's slowest of three runs.
 
 | Config | What it changes |
 | --- | --- |
-| `LEVELS[]` | Each level: `start` (already built), `coins`, `build` (tiles you can buy), `goals` (`earn`, `sell`, `serve`, `build`), `time`, `priceScale` (discounts that level's tiles). |
+| `LEVELS[]` | Each level: `start` (already built), `coins`, `build` (tiles you can buy), `goals`, `time`, `priceScale` (discounts that level's tiles). Goal types: `earn`, `sell`, `serve`, `build`, `fill` (festival cart), `orders` (+ `with`), `crows` (max crops lost), `streak`, `inspect` (`at` seconds, `min` items). The comment above `LEVELS` explains each. |
+| `vip`, `crows`, `inspect`, `customers.queuePatience` | Event tuning: VIP patience and bonus, how often crows come and how long they peck, inspection warning, how long customers wait in line before giving up. |
 | `STAR_TIME_LEFT` | Stars by time left: 30%+ = 3, 10%+ = 2. |
 | `UNLOCKS[].price` and order | Base tile prices and the order tiles appear in (3 at a time). `after:` hides a tile until something else is built. |
 | `products.*.price` | What each item sells for. |

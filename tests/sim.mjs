@@ -120,6 +120,9 @@ check('farm levels: every goal is reachable with what the level starts with or c
     for (const gl of L.goals) {
       if (gl.sell) { assert.ok(FC.stands.some(st => st.product === gl.sell && have.has(st.id)), `${tag}: no ${gl.sell} stand`); assert.ok(makes(gl.sell), `${tag}: nothing makes ${gl.sell}`); }
       if (gl.build) assert.ok(L.build.includes(gl.build), `${tag}: goal builds '${gl.build}' but it isn't on the build list`);
+      if (gl.fill) for (const p of Object.keys(gl.fill)) assert.ok(makes(p), `${tag}: the cart wants ${p}, which nothing makes`);
+      if (gl.orders && gl.with) { assert.ok(makes(gl.with), `${tag}: orders need ${gl.with}, which nothing makes`); assert.ok(FC.stands.some(st => st.product === gl.with && have.has(st.id)), `${tag}: no ${gl.with} stand, so no ${gl.with} orders`); }
+      if (gl.inspect) assert.ok(gl.inspect.at.every(t => t < L.time) && L.time >= gl.inspect.at.at(-1) / .7 - 1, `${tag}: inspections must fit the clock with room for 3 stars`);
       assert.ok(goalText(gl).length > 3);
     }
     assert.ok(L.time >= 60, `${tag}: time looks too short`);

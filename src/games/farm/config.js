@@ -78,11 +78,18 @@ export const CONFIG = {
     queue: [[7.4, 40.1], [6.4, 40.4], [5.4, 40.8], [4.4, 41.2], [3.4, 41.6], [2.4, 42]] },
   upgradeMat: { x: 12.3, y: 42.4 },
 
+  // ---- level events (only in levels whose goals use them) ----
+  cart: { x: 12.4, y: 38.9 },                       // festival cart: { fill: { carrot: 8, ... } }
+  vip: { spot: { x: 3.3, y: 38.3 }, every: 5, patience: 60, items: [3, 5], bonus: 2 }, // special orders: pays bonus x price
+  crows: { every: [6, 11], fly: 1.2, peck: 4.5, scare: 1.7, max: 3 },               // crow patrol
+  inspect: { warn: 25, reward: 25 },                 // seconds of warning (the inspector names one stall then); coins for passing
+
   customers: {
     spawn: { x: 7, y: 47.5 }, gate: { x: 7, y: 43.2 },
     every: 2.4, everyPerStand: -.2, everyMin: 1.2,   // seconds between arrivals
     maxBase: 3, maxPerStand: 1,                     // how many can be around at once
     buyMin: 1, buyMax: 4, takeInterval: .22, patience: 14, speed: 2.4,
+    queuePatience: 30,                               // seconds in line before a customer gives up (breaks a happy streak)
   },
 
   // ---- zones: fences you open with a gate unlock ----
@@ -157,11 +164,16 @@ export const TUTORIAL = [
 //   start: what's already built (on top of the starter carrots + stand)
 //   coins: coins you start with
 //   build: which price tiles appear this level (shown in UNLOCKS order, 3 at a time)
-//   goals: all must be met before time runs out. One of:
+//   goals: all must be met before time runs out. Any of:
 //     { earn: n }               coins from sales this level
 //     { sell: 'bread', n }      items of one product sold
 //     { serve: n }              customers rung up
 //     { build: 'mill' }         something built
+//     { fill: { egg: 10, ... } } fill the festival cart with these
+//     { orders: n, with: 'cheese' } fill n special orders from VIP customers (each includes `with`, if given)
+//     { crows: n }              crows land on ripe crops: lose more than n to them and the level fails
+//     { streak: n }             serve n customers in a row with nobody giving up and leaving
+//     { inspect: { at: [90, 200], min: 4 } } at those seconds in, the stall the inspector names needs min+ items, or the level fails
 //   priceScale: multiplies this level's tile prices (default 1), so a level can be about one chain
 //   time: seconds. Stars come from time left when you finish (STAR_TIME_LEFT).
 const HOME = ['carrotB', 'cornA', 'stand_corn', 'cornB'];
@@ -169,18 +181,19 @@ const HELP = ['hand_carrot', 'cashier', 'hand_corn', 'carrier1'];
 const MEADOW = ['meadow', 'coop', 'stand_egg', 'wheat', 'mill', 'bakery', 'stand_bread', 'hand_wheat', 'carrier2'];
 const PASTURE = ['pasture', 'barn', 'press', 'stand_cheese', 'pumpkin', 'stand_pumpkin', 'carrier3', 'sheep', 'stand_wool', 'hand_pumpkin'];
 export const LEVELS = [
-  { name: 'First Harvest',   time: 90, coins: 0,   start: [],                                  build: ['carrotB'],                                   goals: [{ earn: 40 }], tutorial: true },
-  { name: 'Corn Country',    time: 150, coins: 0,   start: ['carrotB'],                         build: ['cornA', 'stand_corn', 'cornB'],              goals: [{ sell: 'corn', n: 15 }] },
-  { name: 'Helping Hands',   time: 255, coins: 20,  start: ['carrotB', 'cornA', 'stand_corn'],  build: ['hand_carrot', 'cornB', 'cashier', 'hand_corn'], goals: [{ build: 'hand_corn' }, { earn: 200 }] },
-  { name: 'Rush Hour',       time: 165, coins: 30,  start: [...HOME, 'hand_carrot', 'cashier'], build: ['hand_corn', 'carrier1'],                     goals: [{ serve: 30 }] },
-  { name: 'Into the Meadow', time: 180, coins: 60,  start: [...HOME, ...HELP, 'meadow'],        build: ['coop', 'stand_egg', 'carrier2'], priceScale: .6, goals: [{ sell: 'egg', n: 10 }] },
-  { name: 'Daily Bread',     time: 315, coins: 80,  start: [...HOME, ...HELP, 'meadow', 'coop', 'stand_egg', 'wheat', 'mill'], build: ['bakery', 'stand_bread', 'hand_wheat', 'carrier2'], priceScale: .5, goals: [{ sell: 'bread', n: 5 }] },
-  { name: 'Market Day',      time: 285, coins: 0,   start: [...HOME, ...HELP, ...MEADOW],       build: [],                                            goals: [{ earn: 1200 }] },
-  { name: 'Say Cheese',      time: 300, coins: 100, start: [...HOME, ...HELP, ...MEADOW, 'pasture', 'barn'], build: ['press', 'stand_cheese', 'carrier3'], priceScale: .4, goals: [{ sell: 'cheese', n: 6 }] },
-  { name: 'Pumpkin Season',  time: 450, coins: 100, start: [...HOME, ...HELP, ...MEADOW, 'pasture', 'barn', 'press', 'stand_cheese'], build: ['pumpkin', 'stand_pumpkin', 'hand_pumpkin', 'carrier3'], priceScale: .5, goals: [{ sell: 'pumpkin', n: 12 }, { earn: 1200 }] },
-  { name: 'Woolly Business', time: 405, coins: 150, start: [...HOME, ...HELP, ...MEADOW, ...PASTURE.filter(id => !['sheep', 'stand_wool'].includes(id))], build: ['sheep', 'stand_wool'], priceScale: .5, goals: [{ sell: 'wool', n: 8 }] },
-  { name: 'Grand Farm',      time: 690, coins: 100, start: [...HOME, ...HELP],                  build: [...MEADOW, ...PASTURE], priceScale: .6,       goals: [{ earn: 3000 }] },
-  { name: 'Tycoon',          time: 405, coins: 0,   start: [...HOME, ...HELP, ...MEADOW, ...PASTURE], build: [],                                     goals: [{ earn: 4500 }] },
+  { name: 'First Harvest',   time: 60,  coins: 0,   start: [],                                  build: ['carrotB'],                       goals: [{ sell: 'carrot', n: 12 }], tutorial: true },
+  { name: 'Festival Cart',   time: 135, coins: 25,  start: ['carrotB'],                         build: ['cornA', 'cornB'],                goals: [{ fill: { carrot: 8, corn: 8 } }] },
+  { name: 'Crow Patrol',     time: 120, coins: 20,  start: ['carrotB', 'cornA', 'stand_corn'],  build: ['hand_carrot', 'cornB', 'cashier'], goals: [{ sell: 'corn', n: 20 }, { crows: 3 }] },
+  { name: 'Rush Hour',       time: 165, coins: 30,  start: [...HOME, 'hand_carrot', 'hand_corn'], build: ['cashier', 'carrier1'],         goals: [{ streak: 12 }] },
+  { name: 'Into the Meadow', time: 255, coins: 60,  start: [...HOME, ...HELP, 'meadow'],        build: ['coop', 'stand_egg', 'carrier2'], priceScale: .6, goals: [{ orders: 4 }] },
+  { name: 'Daily Bread',     time: 245, coins: 80,  start: [...HOME, ...HELP, 'meadow', 'coop', 'stand_egg', 'wheat', 'mill'], build: ['bakery', 'stand_bread', 'hand_wheat', 'carrier2'], priceScale: .5, goals: [{ sell: 'bread', n: 5 }, { inspect: { at: [80, 170], min: 4 } }] },
+  { name: 'Harvest Fair',    time: 375, coins: 0,   start: [...HOME, ...HELP, ...MEADOW],       build: [],                                goals: [{ fill: { egg: 8, bread: 4, corn: 12 } }, { crows: 4 }] },
+  { name: 'Say Cheese',      time: 360, coins: 100, start: [...HOME, ...HELP, ...MEADOW, 'pasture', 'barn', 'press'], build: ['stand_cheese', 'carrier3'], priceScale: .4, goals: [{ orders: 3, with: 'cheese' }] },
+  { name: 'Pumpkin Season',  time: 555, coins: 100, start: [...HOME, ...HELP, ...MEADOW, 'pasture', 'barn', 'press', 'stand_cheese'], build: ['pumpkin', 'stand_pumpkin', 'hand_pumpkin', 'carrier3'], priceScale: .5, goals: [{ sell: 'pumpkin', n: 12 }, { crows: 4 }] },
+  { name: 'Woolly Business', time: 275, coins: 150, start: [...HOME, ...HELP, ...MEADOW, ...PASTURE.filter(id => !['sheep', 'stand_wool'].includes(id))], build: ['sheep', 'stand_wool'], priceScale: .5, goals: [{ sell: 'wool', n: 8 }, { inspect: { at: [90, 190], min: 4 } }] },
+  { name: 'Grand Farm',      time: 795, coins: 100, start: [...HOME, ...HELP, ...MEADOW],       build: [...PASTURE], priceScale: .6,          goals: [{ build: 'sheep' }, { orders: 4 }] },
+  { name: 'Tycoon',          time: 525, coins: 0,   start: [...HOME, ...HELP, ...MEADOW, ...PASTURE], build: [],                       goals: [{ earn: 3000 }, { orders: 3 }, { streak: 15 }] },
 ];
 export const STAR_TIME_LEFT = [.3, .1]; // finish with 30%+ of the time left = 3 stars, 10%+ = 2, otherwise 1
-// Time limits are about 1.7x the pacing bot's slowest of three runs (npm run farm:pace).
+// Time limits are about 1.7x the pacing bot's slowest of three wins (npm run farm:pace). Inspection
+// levels can't end before their last inspection, so their clocks are last inspection / 0.7 (3 stars at the bell).

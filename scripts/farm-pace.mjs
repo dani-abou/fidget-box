@@ -41,9 +41,16 @@ try {
         }
         const queue = d.customers.some(c => c.state === 'queue'), cashier = d.helpers.some(h => h.kind === 'cashier');
         const types = new Set(P.stack.map(s => s.t));
-        const sinkHere = d.sinks().filter(s => types.has(s.p) && s.room > 0).sort((a, b) => dist(P, a.at) - dist(P, b.at))[0];
+        const sinkHere = d.sinks().filter(s => types.has(s.p) && s.room > 0).sort((a, b) => (d.focus.has(b.p) - d.focus.has(a.p)) || (dist(P, a.at) - dist(P, b.at)))[0]; // goal deliveries first
         let target;
-        if (afford) target = afford.at;
+        const crow = d.crows.filter(c => c.state !== 'flee').sort((a, b) => dist(P, a.plot) - dist(P, b.plot))[0];
+        const inspSt = d.insp.warning && d.insp.stall.stock < d.L.goals.find(g => g.inspect).inspect.min ? d.insp.stall : null;
+        if (crow) target = crow.plot; // run over and shoo it
+        else if (inspSt) { // the inspection comes first, like a person would
+          if (P.stack.some(it => it.t === inspSt.product)) target = inspSt.at;
+          else { const srcs = d.sources(inspSt.product).filter(s => s.n > 0).map(s => s.at), ripe = d.fields.filter(f => d.on(f.id) && f.crop === inspSt.product).flatMap(f => f.plots.filter(pl => pl.g >= f.grow));
+            target = [...srcs, ...ripe].sort((a, b) => dist(P, a) - dist(P, b))[0] || inspSt.at; } }
+        else if (afford) target = afford.at;
         else if (queue && !cashier) target = reg;
         else if (P.stack.length >= cap && sinkHere) target = sinkHere.at;
         else {
@@ -64,11 +71,11 @@ try {
       }
       while (d.S.phase === 'play') { for (let i = 0; i < 300 && d.S.phase === 'play'; i++) { botStep(DT); d.update(DT); } await new Promise(r => setTimeout(r, 0)); }
       const L = LEVELS[n - 1], used = L.time - Math.max(0, d.S.timeLeft);
-      out.push({ n, name: L.name, limit: L.time, used, won: d.goals().every(g => g.done), goals: d.goals().map(g => `${g.text} ${g.have}/${g.need}`).join(', ') + ' · built: ' + L.build.filter(id => d.S.unlocked.has(id)).join(' ') + ' · visible now: ' + d.visibleTiles().map(u => u.id).join(' ') });
+      out.push({ n, name: L.name, limit: L.time, used, won: d.S.phase === 'done' && d.goals().every(g => g.done) && !d.S.failReason, reason: d.S.failReason, goals: d.goals().map(g => `${g.text} ${g.have}/${g.need}`).join(', ') + ' · built: ' + L.build.filter(id => d.S.unlocked.has(id)).join(' ') + ' · visible now: ' + d.visibleTiles().map(u => u.id).join(' ') });
     }
     return out;
   }, only);
   const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   console.log(' lvl  name              bot     limit   ratio  result');
-  for (const r of result) console.log(`${String(r.n).padStart(4)}  ${r.name.padEnd(16)}  ${mmss(r.used).padStart(5)}  ${mmss(r.limit).padStart(6)}   ${(r.limit / r.used).toFixed(2).padStart(4)}x  ${r.won ? 'won' : 'LOST: ' + r.goals}`);
+  for (const r of result) console.log(`${String(r.n).padStart(4)}  ${r.name.padEnd(16)}  ${mmss(r.used).padStart(5)}  ${mmss(r.limit).padStart(6)}   ${(r.limit / r.used).toFixed(2).padStart(4)}x  ${r.won ? 'won' : 'LOST: ' + (r.reason || r.goals)}`);
 } finally { await browser.close(); server.kill(); }
