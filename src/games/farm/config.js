@@ -1,4 +1,4 @@
-// Sunny Acres: every balance number and the whole layout live here.
+// Sunny Acres: every balance number, the whole layout and the levels live here.
 // Positions are in tiles (x across 0..14, y down 0..47). Times are seconds.
 // Rebalance by editing this file only; `npm test` prints the pacing table.
 
@@ -17,8 +17,8 @@ export const CONFIG = {
     speed:   { label: 'Run speed',     icon: '👟', levels: [4.2, 4.8, 5.4, 6.0, 6.6], cost: [25, 90, 260, 700] },
     carry:   { label: 'Basket size',   icon: '🧺', levels: [8, 12, 16, 22, 30],        cost: [20, 70, 220, 600] },
     harvest: { label: 'Harvest speed', icon: '✂️', levels: [.22, .15, .1, .06, .03],  cost: [30, 110, 320, 800], unit: 's per crop' },
-    helperSpeed: { label: 'Helper speed', icon: '🏃', levels: [2.6, 3.1, 3.6, 4.2], cost: [150, 450, 1200], needs: 'hand_carrot' },
-    helperCarry: { label: 'Helper basket', icon: '🧺', levels: [4, 6, 9, 12],      cost: [180, 520, 1400], needs: 'hand_carrot' },
+    helperSpeed: { label: 'Helper speed', icon: '🏃', levels: [3.0, 3.5, 4.0, 4.6], cost: [150, 450, 1200], needs: 'hand_carrot' },
+    helperCarry: { label: 'Helper basket', icon: '🧺', levels: [6, 8, 11, 14],     cost: [180, 520, 1400], needs: 'hand_carrot' },
     machineSpeed: { label: 'Machine speed', icon: '⚙️', levels: [1, 1.4, 1.9, 2.5], cost: [300, 900, 2200], needs: 'mill' },
   },
 
@@ -106,10 +106,6 @@ export const CONFIG = {
   crateCap: 40,
   harvestTimeHelper: .5,
 
-  // ---- offline earnings: only fully automated chains earn while you're away ----
-  // coins = automated coins/sec (what helpers could sell) x seconds away x efficiency, up to maxHours.
-  // 0.1 makes an hour away worth roughly 10 minutes of active play.
-  offline: { efficiency: .1, maxHours: 4, minSeconds: 60 },
 };
 
 // The unlock tiles, in the order they appear. Three are on the ground at a time,
@@ -147,6 +143,7 @@ export const UNLOCKS = [
 export const SHOWN_UNLOCKS = 3;
 export const LOOKAHEAD = 2;        // how far past those 3 the game may look for a tile that's showable
 export const UNLOCK_SECONDS = 1;   // standing on a tile drains its whole price in about this long
+export const UNLOCK_DWELL = .35;   // seconds you must stay on a tile before coins start draining (walking across is free)
 
 // First-run hints, before the unlock goals take over.
 export const TUTORIAL = [
@@ -154,3 +151,36 @@ export const TUTORIAL = [
   { id: 'stock',   text: 'Drop them at the carrot stand' },
   { id: 'sell',    text: 'Stand at the register to sell' },
 ];
+
+// ---- levels ----
+// Each level is a short timed round on the same farm.
+//   start: what's already built (on top of the starter carrots + stand)
+//   coins: coins you start with
+//   build: which price tiles appear this level (shown in UNLOCKS order, 3 at a time)
+//   goals: all must be met before time runs out. One of:
+//     { earn: n }               coins from sales this level
+//     { sell: 'bread', n }      items of one product sold
+//     { serve: n }              customers rung up
+//     { build: 'mill' }         something built
+//   priceScale: multiplies this level's tile prices (default 1), so a level can be about one chain
+//   time: seconds. Stars come from time left when you finish (STAR_TIME_LEFT).
+const HOME = ['carrotB', 'cornA', 'stand_corn', 'cornB'];
+const HELP = ['hand_carrot', 'cashier', 'hand_corn', 'carrier1'];
+const MEADOW = ['meadow', 'coop', 'stand_egg', 'wheat', 'mill', 'bakery', 'stand_bread', 'hand_wheat', 'carrier2'];
+const PASTURE = ['pasture', 'barn', 'press', 'stand_cheese', 'pumpkin', 'stand_pumpkin', 'carrier3', 'sheep', 'stand_wool', 'hand_pumpkin'];
+export const LEVELS = [
+  { name: 'First Harvest',   time: 90, coins: 0,   start: [],                                  build: ['carrotB'],                                   goals: [{ earn: 40 }], tutorial: true },
+  { name: 'Corn Country',    time: 150, coins: 0,   start: ['carrotB'],                         build: ['cornA', 'stand_corn', 'cornB'],              goals: [{ sell: 'corn', n: 15 }] },
+  { name: 'Helping Hands',   time: 255, coins: 20,  start: ['carrotB', 'cornA', 'stand_corn'],  build: ['hand_carrot', 'cornB', 'cashier', 'hand_corn'], goals: [{ build: 'hand_corn' }, { earn: 200 }] },
+  { name: 'Rush Hour',       time: 165, coins: 30,  start: [...HOME, 'hand_carrot', 'cashier'], build: ['hand_corn', 'carrier1'],                     goals: [{ serve: 30 }] },
+  { name: 'Into the Meadow', time: 180, coins: 60,  start: [...HOME, ...HELP, 'meadow'],        build: ['coop', 'stand_egg', 'carrier2'], priceScale: .6, goals: [{ sell: 'egg', n: 10 }] },
+  { name: 'Daily Bread',     time: 315, coins: 80,  start: [...HOME, ...HELP, 'meadow', 'coop', 'stand_egg', 'wheat', 'mill'], build: ['bakery', 'stand_bread', 'hand_wheat', 'carrier2'], priceScale: .5, goals: [{ sell: 'bread', n: 5 }] },
+  { name: 'Market Day',      time: 285, coins: 0,   start: [...HOME, ...HELP, ...MEADOW],       build: [],                                            goals: [{ earn: 1200 }] },
+  { name: 'Say Cheese',      time: 300, coins: 100, start: [...HOME, ...HELP, ...MEADOW, 'pasture', 'barn'], build: ['press', 'stand_cheese', 'carrier3'], priceScale: .4, goals: [{ sell: 'cheese', n: 6 }] },
+  { name: 'Pumpkin Season',  time: 450, coins: 100, start: [...HOME, ...HELP, ...MEADOW, 'pasture', 'barn', 'press', 'stand_cheese'], build: ['pumpkin', 'stand_pumpkin', 'hand_pumpkin', 'carrier3'], priceScale: .5, goals: [{ sell: 'pumpkin', n: 12 }, { earn: 1200 }] },
+  { name: 'Woolly Business', time: 405, coins: 150, start: [...HOME, ...HELP, ...MEADOW, ...PASTURE.filter(id => !['sheep', 'stand_wool'].includes(id))], build: ['sheep', 'stand_wool'], priceScale: .5, goals: [{ sell: 'wool', n: 8 }] },
+  { name: 'Grand Farm',      time: 690, coins: 100, start: [...HOME, ...HELP],                  build: [...MEADOW, ...PASTURE], priceScale: .6,       goals: [{ earn: 3000 }] },
+  { name: 'Tycoon',          time: 405, coins: 0,   start: [...HOME, ...HELP, ...MEADOW, ...PASTURE], build: [],                                     goals: [{ earn: 4500 }] },
+];
+export const STAR_TIME_LEFT = [.3, .1]; // finish with 30%+ of the time left = 3 stars, 10%+ = 2, otherwise 1
+// Time limits are about 1.7x the pacing bot's slowest of three runs (npm run farm:pace).
