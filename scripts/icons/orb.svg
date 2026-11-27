@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Orb: one glossy iridescent sphere floating on black -->
+  <defs>
+    <radialGradient id="body" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="#E8FFFF"/><stop offset=".25" stop-color="#6FE7FF"/><stop offset=".55" stop-color="#8A5CFF"/><stop offset=".85" stop-color="#FF4FC8"/><stop offset="1" stop-color="#3A0F4A"/></radialGradient>
+    <radialGradient id="rim" cx=".5" cy=".5" r=".5"><stop offset=".82" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity=".35"/></radialGradient>
+    <radialGradient id="shadow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#8A5CFF" stop-opacity=".55"/><stop offset="1" stop-color="#8A5CFF" stop-opacity="0"/></radialGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter>
+  </defs>
+  <!--bg--><rect width="512" height="512" fill="#030306"/><!--/bg-->
+  <!--art-->
+  <ellipse cx="256" cy="432" rx="150" ry="30" fill="url(#shadow)"/>
+  <circle cx="256" cy="246" r="168" fill="#8A5CFF" filter="url(#blur)" opacity=".5"/>
+  <circle cx="256" cy="246" r="160" fill="url(#body)"/>
+  <circle cx="256" cy="246" r="160" fill="url(#rim)"/>
+  <ellipse cx="200" cy="170" rx="62" ry="38" fill="#fff" opacity=".75" transform="rotate(-30 200 170)"/>
+  <circle cx="318" cy="330" r="10" fill="#fff" opacity=".45"/>
+  <!--/art-->
+</svg>

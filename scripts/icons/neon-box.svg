@@ -11,6 +11,7 @@
     <radialGradient id="halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#7A4DFF" stop-opacity=".55"/><stop offset="1" stop-color="#7A4DFF" stop-opacity="0"/></radialGradient>
     <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="9"/></filter>
   </defs>
+  <!--bg--><rect width="512" height="512" fill="#05050A"/><!--/bg-->
   <!--art-->
   <circle cx="256" cy="270" r="230" fill="url(#halo)"/>
   <!-- glow pass, then the crisp box -->

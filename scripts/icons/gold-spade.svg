@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Gold Spade: a polished gold spade inside a thin gold ring, on black -->
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF1B8"/><stop offset=".35" stop-color="#F5C04A"/><stop offset=".65" stop-color="#B8801E"/><stop offset="1" stop-color="#FFE08A"/></linearGradient>
+    <radialGradient id="vig" cx=".5" cy=".45" r=".7"><stop offset="0" stop-color="#1A1610"/><stop offset="1" stop-color="#030303"/></radialGradient>
+  </defs>
+  <!--bg--><rect width="512" height="512" fill="url(#vig)"/><!--/bg-->
+  <!--art-->
+  <circle cx="256" cy="256" r="196" fill="none" stroke="url(#gold)" stroke-width="6" opacity=".85"/>
+  <circle cx="256" cy="256" r="178" fill="none" stroke="url(#gold)" stroke-width="2" opacity=".5"/>
+  <path d="M256 112C222 168 150 206 150 268a58 58 0 0 0 98 42L232 392h48l-16-82a58 58 0 0 0 98-42c0-62-72-100-106-156z" fill="url(#gold)"/>
+  <path d="M256 140c-26 44-82 76-90 124" fill="none" stroke="#FFF6D0" stroke-width="7" stroke-linecap="round" opacity=".55"/>
+  <!--/art-->
+</svg>

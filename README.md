@@ -49,7 +49,8 @@ npm run build    # src/ -> dist/ (what Railway runs)
 npm start        # serve dist/ (PORT env var, default 3000)
 npm test         # game logic, no browser: Spades rules/scoring/AI, word boards, slide levels
 npm run verify   # npm test + headless Chromium: offline, plays each game, update toast, installability
-npm run icons    # re-render src/icons/*.png from scripts/icon.svg (only if the art changes)
+npm run icons -- moon               # set the app icon from scripts/icons/moon.svg (src/icons/*.png)
+npm run icons -- --preview out.png   # every design in scripts/icons/ side by side
 npm run levels   # regenerate src/data/slide-levels.json (~5 min; output is committed)
 npm run words    # regenerate src/data/words.txt (needs `npm i --no-save wordlist-english`)
 npm run farm:pace        # Sunny Acres: a bot plays every level in seconds, prints its times vs the limits

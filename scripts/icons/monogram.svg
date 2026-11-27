@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Monogram: a rounded "fb" in a cyan-to-pink gradient line on black -->
+  <defs>
+    <linearGradient id="ink" gradientUnits="userSpaceOnUse" x1="96" y1="110" x2="430" y2="400"><stop offset="0" stop-color="#2FE6FF"/><stop offset=".5" stop-color="#8A6BFF"/><stop offset="1" stop-color="#FF3FD8"/></linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
+  </defs>
+  <!--bg--><rect width="512" height="512" fill="#06060B"/><!--/bg-->
+  <!--art-->
+  <g fill="none" stroke="url(#ink)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round">
+    <g filter="url(#glow)" opacity=".75"><path d="M232 150c-14-22-40-30-62-22-24 9-32 32-32 58v200M106 250h96"/><path d="M290 130v248"/><circle cx="350" cy="318" r="60"/></g>
+    <path d="M232 150c-14-22-40-30-62-22-24 9-32 32-32 58v200M106 250h96"/><path d="M290 130v248"/><circle cx="350" cy="318" r="60"/>
+  </g>
+  <!--/art-->
+</svg>

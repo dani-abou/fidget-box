@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Bubbles: glassy bubbles on a soft lilac-to-peach gradient -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B6A4FF"/><stop offset=".55" stop-color="#E7A6E8"/><stop offset="1" stop-color="#FFC2A1"/></linearGradient>
+    <radialGradient id="glass" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".35" stop-color="#fff" stop-opacity=".35"/><stop offset=".8" stop-color="#fff" stop-opacity=".1"/><stop offset="1" stop-color="#fff" stop-opacity=".5"/></radialGradient>
+  </defs>
+  <!--bg--><rect width="512" height="512" fill="url(#bg)"/><!--/bg-->
+  <!--art-->
+  <g stroke="#fff" stroke-opacity=".8" stroke-width="5">
+    <circle cx="226" cy="282" r="138" fill="url(#glass)"/>
+    <circle cx="372" cy="150" r="64" fill="url(#glass)"/>
+    <circle cx="388" cy="358" r="40" fill="url(#glass)"/>
+  </g>
+  <ellipse cx="172" cy="214" rx="44" ry="26" fill="#fff" opacity=".9" transform="rotate(-35 172 214)"/>
+  <ellipse cx="350" cy="126" rx="18" ry="11" fill="#fff" opacity=".9" transform="rotate(-35 350 126)"/>
+  <!--/art-->
+</svg>

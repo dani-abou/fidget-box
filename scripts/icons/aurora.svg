@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Aurora: soft colour clouds on deep navy, one white sparkle -->
+  <defs>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="55"/></filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10"/></filter>
+  </defs>
+  <!--bg-->
+  <rect width="512" height="512" fill="#070A1F"/>
+  <g filter="url(#soft)"><circle cx="120" cy="140" r="150" fill="#3A2BFF"/><circle cx="400" cy="160" r="140" fill="#FF3FA4"/><circle cx="300" cy="420" r="170" fill="#16D6C4"/><circle cx="90" cy="430" r="110" fill="#8A3BFF"/></g>
+  <rect width="512" height="512" fill="#070A1F" opacity=".18"/>
+  <!--/bg-->
+  <!--art-->
+  <path d="M256 120c10 70 46 106 116 116-70 10-106 46-116 116-10-70-46-106-116-116 70-10 106-46 116-116z" fill="#fff" filter="url(#glow)" opacity=".7"/>
+  <path d="M256 120c10 70 46 106 116 116-70 10-106 46-116 116-10-70-46-106-116-116 70-10 106-46 116-116z" fill="#fff"/>
+  <circle cx="372" cy="362" r="12" fill="#fff" opacity=".9"/><circle cx="150" cy="150" r="7" fill="#fff" opacity=".8"/>
+  <!--/art-->
+</svg>

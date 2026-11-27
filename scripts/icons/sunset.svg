@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Sunset: a striped retro sun over a glowing grid, on black -->
+  <defs>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE45C"/><stop offset=".5" stop-color="#FF8A3D"/><stop offset="1" stop-color="#FF2E88"/></linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#05030C"/><stop offset=".7" stop-color="#2A0B3D"/><stop offset="1" stop-color="#05030C"/></linearGradient>
+    <clipPath id="cut"><rect x="0" y="0" width="512" height="270"/><rect x="0" y="282" width="512" height="14"/><rect x="0" y="306" width="512" height="12"/><rect x="0" y="328" width="512" height="10"/></clipPath>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="16"/></filter>
+  </defs>
+  <!--bg--><rect width="512" height="512" fill="url(#sky)"/><!--/bg-->
+  <!--art-->
+  <circle cx="256" cy="250" r="140" fill="#FF5A7A" filter="url(#glow)" opacity=".6"/>
+  <circle cx="256" cy="250" r="130" fill="url(#sun)" clip-path="url(#cut)"/>
+  <g stroke="#B04CFF" stroke-width="3" opacity=".85" fill="none">
+    <path d="M56 356H456M36 380H476M16 410H496M0 448H512"/>
+    <path d="M256 352V512M216 352 150 512M296 352 362 512M176 352 40 512M336 352 472 512"/>
+  </g>
+  <!--/art-->
+</svg>
