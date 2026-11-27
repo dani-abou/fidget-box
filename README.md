@@ -13,7 +13,8 @@ Ad-free games, as an installable PWA that works fully offline:
   from 2 to 45 moves; each level's minimum is proven by a solver, and
   matching it earns three stars.
 - **Spades**: you and Ollie the owl against a new pair of animal rivals each
-  level, on a felt table with a fanned hand. Players react with speech
+  level, on a felt table with a fanned hand. Games go to 500 by default;
+  change it under the gear (150/250/300/500). Players react with speech
   bubbles (trumps, broken nils, sets, bags, wins); tap your own face to send
   an emote. Each level is
   one game to a target score (200, then 250, then 300). Opponents get

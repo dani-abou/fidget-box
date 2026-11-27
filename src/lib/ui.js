@@ -14,8 +14,8 @@ export const pills = items => items.map(({ label = '', value, cls = '' }) =>
  * mood: 'win' (confetti) | 'lose' (peach ribbon) | undefined. Returns close().
  * A button's onClick runs after the panel closes.
  */
-export function panel(host, { title, html = '', buttons = [], dismissable = false, mood }) {
-  const ov = document.createElement('div'); ov.className = 'ov';
+export function panel(host, { title, html = '', buttons = [], dismissable = false, mood, cls = '' }) {
+  const ov = document.createElement('div'); ov.className = 'ov' + (cls ? ' ' + cls : '');
   ov.innerHTML = `<div class="panel${mood ? ' ' + mood : ''}" role="dialog" aria-modal="true"><h2></h2><div class="pbody">${html}</div><div class="pbtns"></div></div>`;
   ov.querySelector('h2').textContent = title;
   const close = () => ov.remove();

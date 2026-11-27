@@ -1,7 +1,7 @@
 // Spades: you (South) and an AI partner (North) against West and East.
 // Standard rules: follow suit, spades are trump and can't be led until broken,
 // nil bids (+/-100), 10*bid for a made contract, overtricks are bags and every
-// 10 bags costs 100. Each level is one game to a target score; opponents get
+// 10 bags costs 100. Each level is one game (to 500 unless changed in settings); opponents get
 // sharper each level (fewer slips, card counting, ducking bags, attacking nil).
 // The game in progress is saved after every card, so closing the app is safe.
 import { ac, buzz, click, tone } from '../lib/sound.js';
@@ -16,8 +16,11 @@ const team = p => p % 2; // 0 = you + partner, 1 = West + East
 const RED = c => suit(c) === 1 || suit(c) === 2;
 
 // ---------- level settings ----------
+// "Game to" is a setting (menu), 500 by default; levels only change how sharp the rivals are.
+export const TARGETS = [150, 250, 300, 500];
+const getTarget = () => { const t = loadSave('spades-target'); return TARGETS.includes(t) ? t : 500; };
 export const levelRules = n => ({
-  target: n <= 2 ? 200 : n <= 5 ? 250 : 300,
+  target: getTarget(),
   skill: Math.min(1, .12 + (n - 1) * .11), // opponents
   partner: .8,
 });
@@ -292,6 +295,20 @@ export default {
 .sp-step .cur.nil{font-size:36px}
 .sp-bidhint{text-align:center;font-size:14px;margin:0 0 4px}
 .sp-bidgo{width:100%;font-size:24px;padding:12px}
+/* the bid window stays small and light, so the players on either side stay visible */
+.sp-bidov{background:rgba(10,6,26,.22);padding:12px 12px 70px;align-items:flex-end} /* sits below West/East, above you */
+.sp-bidov .panel{max-width:236px;padding:24px 12px 12px}
+.sp-bidov .panel h2{font-size:17px;padding:4px 16px}
+.sp-bidov .sp-bidq{font-size:15px;margin:0 0 4px}
+.sp-bidov .sp-step{gap:2px;margin:2px 0}
+.sp-bidov .sp-step button.arrow{width:30px;height:48px;font-size:28px}
+.sp-bidov .sp-step .side{width:30px;font-size:17px}
+.sp-bidov .sp-step .cur{width:64px;height:72px;font-size:44px;border-radius:14px}
+.sp-bidov .sp-step .cur.nil{font-size:26px}
+.sp-bidov .sp-bidhint{font-size:15px;margin:2px 0 6px}
+.sp-bidov .sp-bidgo{font-size:19px;padding:8px}
+.sp-opts{display:flex;gap:6px;margin:4px 0 12px}
+.sp-opts .btn{flex:1;padding:7px 0;font-size:16px}
 /* emote picker */
 .sp-emotes{position:absolute;z-index:9;bottom:76px;left:50%;transform:translateX(-50%);display:flex;gap:6px;padding:8px;background:var(--surface);
   border:3px solid var(--outline);border-radius:18px;box-shadow:0 5px 0 var(--outline);animation:popin .3s cubic-bezier(.3,1.6,.5,1)}
@@ -305,7 +322,7 @@ export default {
 
   init(el) {
     const prog = progress('spades');
-    el.innerHTML = `<div class="gbar"><span class="stat"></span><button class="ibtn menu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button></div>
+    el.innerHTML = `<div class="gbar"><span class="stat"></span><button class="ibtn menu" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button></div>
       <div class="sp"><div class="sp-table">
         <div class="sp-felt"></div>
         <div class="sp-fan sp-fan-n" data-p="2"></div><div class="sp-fan sp-fan-w" data-p="1"></div><div class="sp-fan sp-fan-e" data-p="3"></div>
@@ -431,14 +448,13 @@ export default {
     }
 
     function askBid() {
-      const est = Math.max(1, Math.round(estimate(s.hands[0])));
-      let v = est;
+      let v = 1;
       const others = [1, 2, 3].filter(p => s.bids[p] !== null).map(p => `${who[p].icon} ${s.bids[p] === 0 ? 'Nil' : s.bids[p]}`).join(' &nbsp; ');
       const html = `<div class="sp-bidq">How many tricks will you win?</div>
         <div class="sp-step"><button class="arrow prev" aria-label="Fewer">‹</button><span class="side lo"></span><span class="cur" aria-live="polite"></span><span class="side hi"></span><button class="arrow next" aria-label="More">›</button></div>
-        <p class="sp-bidhint">Your hand looks good for about <b>${est}</b>${others ? `<br>${others}` : ''}</p>
+        ${others ? `<p class="sp-bidhint">${others}</p>` : ''}
         <button class="btn go sp-bidgo">Place bid</button>`;
-      closePanel = panel(table, { title: 'Your bid', html });
+      closePanel = panel(table, { title: 'Your bid', html, cls: 'sp-bidov' });
       const ov = table.lastElementChild, lab = x => x === 0 ? 'Nil' : String(x);
       const show = () => {
         ov.querySelector('.cur').textContent = lab(v); ov.querySelector('.cur').classList.toggle('nil', v === 0);
@@ -528,7 +544,7 @@ export default {
       const won = us > them && us > -200;
       writeSave('spades', null);
       if (won) {
-        const stars = us - them >= 120 ? 3 : us - them >= 50 ? 2 : 1;
+        const stars = us - them >= R.target * .24 ? 3 : us - them >= R.target * .1 ? 2 : 1; // margin, relative to the game length
         prog.complete(s.level, stars); [523, 659, 784, 1047].forEach((f, i) => later(() => tone(f), i * 120)); buzz(40);
         say(2, pick(LINES.win), { force: true }); later(() => say(pick([1, 3]), pick(LINES.lose), { force: true }), 700);
         const last = s.level >= LEVELS, next = cast(s.level + 1);
@@ -564,11 +580,17 @@ export default {
     $('.menu').onclick = () => {
       const R = levelRules(s.level);
       panel(el, {
-        title: 'Spades', dismissable: true,
-        html: `<p>Level ${s.level} vs ${who[1].icon} ${nm(1)} &amp; ${who[3].icon} ${nm(3)}: first team to <b>${R.target}</b> wins. Nil is worth 100, made bids 10 a trick, and every 10 overtricks (bags) costs 100.</p>` +
+        title: 'Settings', dismissable: true,
+        html: `<p><b>Game to</b> (applies right away)</p><div class="sp-opts">${TARGETS.map(t => `<button class="btn${t === R.target ? ' primary' : ''}" data-t="${t}">${t}</button>`).join('')}</div>` +
+          `<p>Level ${s.level} vs ${who[1].icon} ${nm(1)} &amp; ${who[3].icon} ${nm(3)}. Nil is worth 100, made bids 10 a trick, and every 10 overtricks (bags) costs 100.</p>` +
           `<p>Tap your ${YOU.icon} to send an emote.</p>` +
           (s.lastTrick ? `<p>Last trick: ${s.lastTrick.map(t => `${who[t.p].icon} ${RANKS[rank(t.c)]}${SUITS[suit(t.c)]}`).join(', ')}</p>` : ''),
         buttons: [{ label: 'Levels', onClick: pickLevel }, { label: 'Restart', onClick: () => restart(s.level) }, { label: 'Back', primary: true }],
+      });
+      el.querySelectorAll('.sp-opts .btn').forEach(b => b.onclick = () => {
+        writeSave('spades-target', +b.dataset.t);
+        el.querySelectorAll('.sp-opts .btn').forEach(o => o.classList.toggle('primary', o === b));
+        render();
       });
     };
 
