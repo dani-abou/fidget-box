@@ -82,7 +82,11 @@ export const CONFIG = {
   cart: { x: 12.4, y: 38.9 },                       // festival cart: { fill: { carrot: 8, ... } }
   vip: { spot: { x: 3.3, y: 38.3 }, every: 5, patience: 60, items: [3, 5], bonus: 2 }, // special orders: pays bonus x price
   crows: { every: [6, 11], fly: 1.2, peck: 4.5, scare: 1.7, max: 3 },               // crow patrol
-  inspect: { warn: 25, reward: 25 },                 // seconds of warning (the inspector names one stall then); coins for passing
+  inspect: { warn: 25, reward: 25 },
+
+  // ---- Free Farm (endless mode): what you earn while away ----
+  // coins = automated coins/sec (what helpers could sell) x seconds away x efficiency, up to maxHours.
+  offline: { efficiency: .1, maxHours: 4, minSeconds: 60 },                 // seconds of warning (the inspector names one stall then); coins for passing
 
   customers: {
     spawn: { x: 7, y: 47.5 }, gate: { x: 7, y: 43.2 },
@@ -174,6 +178,8 @@ export const TUTORIAL = [
 //     { crows: n }              crows land on ripe crops: lose more than n to them and the level fails
 //     { streak: n }             serve n customers in a row with nobody giving up and leaving
 //     { inspect: { at: [90, 200], min: 4 } } at those seconds in, the stall the inspector names needs min+ items, or the level fails
+//     { builds: n }             build n things (Mega Expansion levels)
+//   mega: true marks a Mega Expansion level (big, one long build-out; seeds x META.reward.megaMult)
 //   priceScale: multiplies this level's tile prices (default 1), so a level can be about one chain
 //   time: seconds. Stars come from time left when you finish (STAR_TIME_LEFT).
 const HOME = ['carrotB', 'cornA', 'stand_corn', 'cornB'];
@@ -185,15 +191,40 @@ export const LEVELS = [
   { name: 'Festival Cart',   time: 135, coins: 25,  start: ['carrotB'],                         build: ['cornA', 'cornB'],                goals: [{ fill: { carrot: 8, corn: 8 } }] },
   { name: 'Crow Patrol',     time: 120, coins: 20,  start: ['carrotB', 'cornA', 'stand_corn'],  build: ['hand_carrot', 'cornB', 'cashier'], goals: [{ sell: 'corn', n: 20 }, { crows: 3 }] },
   { name: 'Rush Hour',       time: 165, coins: 30,  start: [...HOME, 'hand_carrot', 'hand_corn'], build: ['cashier', 'carrier1'],         goals: [{ streak: 12 }] },
+  { name: 'Mega Expansion: Home Field', mega: true, time: 300, coins: 0, start: [], build: [...HOME, ...HELP], priceScale: .7, goals: [{ builds: 8 }] },
   { name: 'Into the Meadow', time: 255, coins: 60,  start: [...HOME, ...HELP, 'meadow'],        build: ['coop', 'stand_egg', 'carrier2'], priceScale: .6, goals: [{ orders: 4 }] },
   { name: 'Daily Bread',     time: 245, coins: 80,  start: [...HOME, ...HELP, 'meadow', 'coop', 'stand_egg', 'wheat', 'mill'], build: ['bakery', 'stand_bread', 'hand_wheat', 'carrier2'], priceScale: .5, goals: [{ sell: 'bread', n: 5 }, { inspect: { at: [80, 170], min: 4 } }] },
   { name: 'Harvest Fair',    time: 375, coins: 0,   start: [...HOME, ...HELP, ...MEADOW],       build: [],                                goals: [{ fill: { egg: 8, bread: 4, corn: 12 } }, { crows: 4 }] },
+  { name: 'Mega Expansion: Meadow', mega: true, time: 300, coins: 80, start: [...HOME, ...HELP], build: [...MEADOW], priceScale: .4, goals: [{ builds: 8 }] },
   { name: 'Say Cheese',      time: 360, coins: 100, start: [...HOME, ...HELP, ...MEADOW, 'pasture', 'barn', 'press'], build: ['stand_cheese', 'carrier3'], priceScale: .4, goals: [{ orders: 3, with: 'cheese' }] },
   { name: 'Pumpkin Season',  time: 555, coins: 100, start: [...HOME, ...HELP, ...MEADOW, 'pasture', 'barn', 'press', 'stand_cheese'], build: ['pumpkin', 'stand_pumpkin', 'hand_pumpkin', 'carrier3'], priceScale: .5, goals: [{ sell: 'pumpkin', n: 12 }, { crows: 4 }] },
   { name: 'Woolly Business', time: 275, coins: 150, start: [...HOME, ...HELP, ...MEADOW, ...PASTURE.filter(id => !['sheep', 'stand_wool'].includes(id))], build: ['sheep', 'stand_wool'], priceScale: .5, goals: [{ sell: 'wool', n: 8 }, { inspect: { at: [90, 190], min: 4 } }] },
   { name: 'Grand Farm',      time: 795, coins: 100, start: [...HOME, ...HELP, ...MEADOW],       build: [...PASTURE], priceScale: .6,          goals: [{ build: 'sheep' }, { orders: 4 }] },
   { name: 'Tycoon',          time: 525, coins: 0,   start: [...HOME, ...HELP, ...MEADOW, ...PASTURE], build: [],                       goals: [{ earn: 3000 }, { orders: 3 }, { streak: 15 }] },
+
+  { name: 'Mega Expansion: The Whole Farm', mega: true, time: 300, coins: 100, start: [], build: [...HOME, ...HELP, ...MEADOW, ...PASTURE], priceScale: .3, goals: [{ builds: 16 }] },
 ];
 export const STAR_TIME_LEFT = [.3, .1]; // finish with 30%+ of the time left = 3 stars, 10%+ = 2, otherwise 1
 // Time limits are about 1.7x the pacing bot's slowest of three wins (npm run farm:pace). Inspection
 // levels can't end before their last inspection, so their clocks are last inspection / 0.7 (3 stars at the bell).
+
+// ---- Free Farm: the endless mode builds everything, saves as you go, and pays offline earnings ----
+export const FREE = { name: 'Free Farm', coins: 0, start: [], build: UNLOCKS.map(u => u.id), goals: [], tutorial: true };
+
+// ---- meta progression for levels: seeds earned by winning, spent on permanent upgrades ----
+// reward: firstWin on a level's first win, perStar for each new star (over your best), replay for any win.
+// upgrades apply at the start of every level; levels[i] is the value at upgrade level i.
+export const META = {
+  icon: '🌻', name: 'Seeds',
+  reward: { firstWin: 4, perStar: 3, replay: 1, megaMult: 2 },
+  upgrades: {
+    headStart: { label: 'Head start',     icon: '🪙', levels: [0, 25, 50, 90, 150], cost: [4, 10, 22, 40], unit: 'coins to start' },
+    time:      { label: 'Extra time',     icon: '⏱', levels: [0, 10, 20, 30],      cost: [5, 14, 30],     unit: 's per level' },
+    speed:     { label: 'Running shoes',  icon: '👟', levels: [0, 1, 2],            cost: [8, 24],         unit: 'run speed levels' },
+    carry:     { label: 'Bigger basket',  icon: '🧺', levels: [0, 1, 2],            cost: [6, 20],         unit: 'basket levels' },
+    harvest:   { label: 'Quick hands',    icon: '✂️', levels: [0, 1, 2],            cost: [6, 20],         unit: 'harvest levels' },
+    prices:    { label: 'Better prices',  icon: '💰', levels: [1, 1.1, 1.2, 1.3],   cost: [8, 22, 45],     unit: 'x sale price' },
+    patience:  { label: 'Patient VIPs',   icon: '⭐', levels: [0, 15, 30],          cost: [6, 18],         unit: 's more VIP patience' },
+    scarecrow: { label: 'Scarecrow',      icon: '🧑‍🌾', levels: [0, .5, 1],          cost: [6, 18],         unit: 'tiles more crow-scaring reach' },
+  },
+};

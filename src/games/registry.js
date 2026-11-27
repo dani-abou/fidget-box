@@ -2,6 +2,7 @@
 // the wide one). To add a game: create games/<id>.js and add its id here.
 export default [
   'farm',
+  'farm-free',
   'hotel',
   'slide',
   'spades',

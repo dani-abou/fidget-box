@@ -5,10 +5,10 @@
 // goal and a clock. Numbers, layout and levels: farm/config.js. Drawing:
 // farm/art.js. This file is the game loop. Levels and stars are saved.
 import { ac, buzz, click, tone } from '../lib/sound.js';
-import { progress } from '../lib/progress.js';
-import { panel, levelPicker, starsHTML } from '../lib/ui.js';
+import { progress, loadSave, writeSave } from '../lib/progress.js';
+import { panel, levelPicker, starsHTML, pills } from '../lib/ui.js';
 import { confetti } from '../lib/fx.js';
-import { CONFIG as C, UNLOCKS, SHOWN_UNLOCKS, LOOKAHEAD, UNLOCK_SECONDS, UNLOCK_DWELL, TUTORIAL, LEVELS, STAR_TIME_LEFT } from './farm/config.js';
+import { CONFIG as C, UNLOCKS, SHOWN_UNLOCKS, LOOKAHEAD, UNLOCK_SECONDS, UNLOCK_DWELL, TUTORIAL, LEVELS, STAR_TIME_LEFT, FREE, META } from './farm/config.js';
 import { createArt, rr, INK } from './farm/art.js';
 
 const START_IDS = new Set([...C.fields, ...C.stands, ...C.zones].filter(e => e.start).map(e => e.id));
@@ -27,10 +27,67 @@ export const goalText = gl =>
   gl.orders ? `Fill ${gl.orders} special orders${gl.with ? ` with ${ICON[gl.with]}` : ''}` :
   gl.crows !== undefined ? `Shoo the crows: lose no more than ${gl.crows} crops` :
   gl.streak ? `Serve ${gl.streak} happy customers in a row` :
+  gl.builds ? `Build ${gl.builds} things` :
   gl.inspect ? `Pass ${gl.inspect.at.length} stall inspections (${gl.inspect.min}+ on the stall they pick)` :
   `Build the ${UNLOCKS.find(u => u.id === gl.build)?.label.toLowerCase()}`;
 /** Stars for finishing with `left` of `total` seconds to spare. */
 export const starsFor = (left, total) => left / total >= STAR_TIME_LEFT[0] ? 3 : left / total >= STAR_TIME_LEFT[1] ? 2 : 1;
+
+const START_ON = id => START_IDS.has(id);
+/** Coins per second the farm makes on its own (Free Farm offline earnings). Exported for tests. */
+export function automatedRate(unlocked, upLevels = {}) {
+  const on = id => START_ON(id) || unlocked.has(id);
+  const has = kind => C.helpers.some(h => h.kind === kind && on(h.id));
+  if (!has('cashier') || !has('carrier')) return 0;
+  const mSpeed = C.upgrades.machineSpeed.levels[upLevels.machineSpeed || 0];
+  const prod = p => {
+    let u = 0;
+    for (const f of C.fields) if (f.crop === p && on(f.id) && C.helpers.some(h => h.kind === 'farmhand' && on(h.id) && h.fields.includes(f.id))) u += f.w * f.h / f.grow;
+    for (const pen of C.pens) if (pen.product === p && on(pen.id)) u += pen.animals / pen.interval;
+    for (const m of C.machines) if (m.out === p && on(m.id)) u += Math.min(prod(m.in), mSpeed / m.time);
+    return u;
+  };
+  const stands = C.stands.filter(s => on(s.id));
+  const every = Math.max(C.customers.everyMin, C.customers.every + C.customers.everyPerStand * stands.length);
+  const demand = (C.customers.buyMin + C.customers.buyMax) / 2 / every;
+  let units = 0, value = 0;
+  for (const s of stands) { const u = prod(s.product); units += u; value += u * C.products[s.product].price; }
+  return units > 0 ? value * Math.min(1, demand / units) : 0;
+}
+
+// ---- seeds: the level mode's permanent currency ----
+export const loadMeta = () => { const m = loadSave('farm-meta') || {}; return { seeds: m.seeds || 0, up: m.up || {}, total: m.total || 0 }; };
+const saveMeta = m => writeSave('farm-meta', m);
+export const metaValue = (m, k) => META.upgrades[k].levels[m.up[k] || 0];
+/** Seeds for a win: first-win bonus, new stars over your best, plus a little for any win. */
+export function seedsFor(stars, prevStars, mega) {
+  const R = META.reward;
+  const n = (prevStars ? 0 : R.firstWin) + Math.max(0, stars - prevStars) * R.perStar + R.replay;
+  return mega ? n * R.megaMult : n;
+}
+/** The seed shop, as a panel over `host`. onChange runs after each purchase. */
+function metaShop(host, onChange) {
+  const m = loadMeta();
+  panel(host, { title: `${META.icon} Seed Shop`, html: '<div class="fm-meta"></div>', buttons: [{ label: 'Done', primary: true }], dismissable: true });
+  const box = host.lastElementChild.querySelector('.fm-meta');
+  const render = () => {
+    let h = `<p style="text-align:center;margin-bottom:8px">You have <b>${META.icon} ${m.seeds}</b>. Win levels for more; new stars pay best.<br><small>These upgrades apply to every level.</small></p>`;
+    for (const [k, u] of Object.entries(META.upgrades)) {
+      const lvl = m.up[k] || 0, max = lvl >= u.cost.length, price = u.cost[lvl];
+      const dots = u.levels.map((_, i) => `<i class="${i <= lvl ? 'on' : ''}"></i>`).join('');
+      h += `<div class="fm-up"><span class="ic">${u.icon}</span><span class="nm">${u.label}<span class="fm-lv">${dots}</span><small>${max ? 'Maxed' : `${u.levels[lvl]} → ${u.levels[lvl + 1]} ${u.unit}`}</small></span>` +
+        `<button class="btn ${!max && m.seeds >= price ? 'go' : ''}" data-k="${k}" ${max || m.seeds < price ? 'disabled' : ''}>${max ? 'MAX' : META.icon + ' ' + price}</button></div>`;
+    }
+    box.innerHTML = h;
+    box.querySelectorAll('.btn[data-k]').forEach(b => b.onclick = () => {
+      const k = b.dataset.k, price = META.upgrades[k].cost[m.up[k] || 0];
+      if (m.seeds < price) return;
+      m.seeds -= price; m.up[k] = (m.up[k] || 0) + 1; saveMeta(m);
+      [784, 988, 1175].forEach((f, i) => setTimeout(() => tone(f), i * 80)); buzz(20); render(); onChange?.();
+    });
+  };
+  render();
+}
 
 export default {
   id: 'farm',
@@ -45,6 +102,10 @@ export default {
     <rect x="60" y="40" width="32" height="26" rx="4" fill="#C98A50" stroke="#2B1D3A" stroke-width="4"/><path d="M57 40h38l-4-12H61z" fill="#FF6B6B" stroke="#2B1D3A" stroke-width="4" stroke-linejoin="round"/>
     <circle cx="70" cy="84" r="9" fill="#FFC93C" stroke="#2B1D3A" stroke-width="3.5"/><circle cx="84" cy="80" r="7" fill="#FFC93C" stroke="#2B1D3A" stroke-width="3"/></svg>`,
   levels: LEVELS.length,
+  meta() {
+    const pr = progress('farm');
+    return pills([{ label: 'Level', value: Math.min(pr.unlocked, LEVELS.length), cls: 'lvl' }, { value: `★ ${pr.totalStars}<i>/${LEVELS.length * 3}</i>`, cls: 'star' }, { value: `${META.icon} ${loadMeta().seeds}` }]);
+  },
   css: `
 .fm{flex:1;min-height:0;position:relative;overflow:hidden;overflow:clip;touch-action:none;background:#86CF62}
 .fm canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -72,6 +133,8 @@ export default {
 .fm-up .nm{color:var(--ink);font-weight:600;font-size:15px;line-height:1.15}
 .fm-up .nm small{display:block;color:var(--muted);font-weight:500;font-size:12px}
 .fm-up .btn{padding:6px 12px;font-size:15px;min-width:84px}
+.panel.mega h2{--ribbon:linear-gradient(90deg,#2FE6FF,#AE8CFF,#FF6FAE)}
+.fm-shopbtn{display:block;width:100%;margin-top:10px;--b:#5B3FB8}
 .fm-lv{display:inline-flex;gap:3px;margin-left:4px;vertical-align:middle}
 .fm-lv i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2)} .fm-lv i.on{background:#FFD23F}`,
 
@@ -89,8 +152,9 @@ export default {
   },
 };
 
-// One level: builds a fresh farm from the level's config and runs it. Returns cleanup.
-function runLevel(el, n, api) {
+// One level (mode 'levels'), or the endless Free Farm (mode 'free', n = 0). Returns cleanup.
+export function runLevel(el, n, api, mode = 'levels') {
+  const free = mode === 'free';
   el.innerHTML = `<div class="fm"><canvas></canvas>
     <div class="fm-hud"><div class="fm-coins"><i>🪙</i><b>0</b></div><div class="fm-quest" aria-live="polite"></div><button class="fm-time" aria-label="Pause">⏸ <span>0:00</span></button></div><div class="fm-bag fm-coins">🧺 0/8</div>
     <div class="fm-joy"><i></i></div><div class="fm-sheet" hidden></div></div>`;
@@ -99,13 +163,21 @@ function runLevel(el, n, api) {
   const joyEl = root.querySelector('.fm-joy'), knob = joyEl.querySelector('i'), sheet = root.querySelector('.fm-sheet');
 
   // ================= state =================
-  const L = LEVELS[n - 1], sv = {}; // every level starts fresh from its config
-  api.prog.play(n);
+  // levels start fresh from their config; the Free Farm restores its save
+  const L = free ? FREE : LEVELS[n - 1], sv = free ? (loadSave('farm-free') || {}) : {};
+  if (!free) api.prog.play(n);
   const S = {
-    coins: L.coins, unlocked: new Set(L.start), partial: {}, up: {},
-    tut: L.tutorial ? 0 : TUTORIAL.length, earned: 0, sold: {}, served: 0, streak: 0, bestStreak: 0, crowLost: 0, failReason: '',
-    timeLeft: L.time, phase: 'intro', paused: false,
+    coins: sv.coins ?? L.coins, unlocked: new Set(sv.unlocked || L.start), partial: sv.partial || {}, up: sv.up || {},
+    tut: sv.tut ?? (L.tutorial ? 0 : TUTORIAL.length), earned: sv.earned ?? 0, sold: {}, served: 0, streak: 0, bestStreak: 0, crowLost: 0, failReason: '', built: 0,
+    timeLeft: L.time ?? Infinity, phase: free ? 'play' : 'intro', paused: false,
   };
+  const bonus = { prices: 1, patience: 0, scare: 0 }; // from seed-shop upgrades, applied when a level starts
+  function applyMeta() {
+    const m = loadMeta(), v = k => metaValue(m, k);
+    S.coins += v('headStart'); coinShown = S.coins; S.timeLeft = L.time + v('time');
+    for (const k of ['speed', 'carry', 'harvest']) S.up[k] = Math.min(C.upgrades[k].cost.length, v(k));
+    Object.assign(bonus, { prices: v('prices'), patience: v('patience'), scare: v('scarecrow') });
+  }
   const buildable = new Set(L.build);
   // this level's price tiles (prices scaled by L.priceScale, rounded to 5)
   const TILES = UNLOCKS.map(u => ({ ...u, price: Math.max(5, Math.round(u.price * (L.priceScale ?? 1) / 5) * 5) }));
@@ -136,7 +208,7 @@ function runLevel(el, n, api) {
     crop: C.fields.find(f => f.id === h.fields[0]).crop }));
   const helpers = [];
   const customers = [], flying = [], coinsFx = [], floaters = [], puffs = [];
-  let shake = 0, raf, last = performance.now(), dead = false;
+  let shake = 0, raf, last = performance.now(), dead = false, saveT = 3, offlinePanel = null;
   let W = 0, H = 0, T = 40, dpr = 1, art = null, groundCv = null, camX = 0, camY = 0, coinShown = S.coins, padAcc = 0, padFx = 0;
   let custT = 1, checkoutT = 0, clinkT = 0, sheetFor = null, tileDwell = 0, lastTile = null;
 
@@ -153,7 +225,14 @@ function runLevel(el, n, api) {
   for (const h of C.helpers) if (on(h.id)) spawnHelper(h);
 
   // ================= saving =================
-  const save = () => {}; // a level is a short round; only levels and stars are saved (by api.prog)
+  // Free Farm saves everything; a level is a short round (only levels, stars and seeds are kept)
+  const save = () => { if (free) writeSave('farm-free', {
+    coins: S.coins, unlocked: [...S.unlocked], partial: S.partial, up: S.up, tut: S.tut, earned: S.earned,
+    player: { x: +P.x.toFixed(2), y: +P.y.toFixed(2), stack: P.stack.map(x => x.t) },
+    piles: Object.fromEntries(pens.map(q => [q.id, q.n])), crates: Object.fromEntries(crates.map(c => [c.id, c.n])),
+    stands: Object.fromEntries(stands.map(x => [x.product, x.stock])), machines: Object.fromEntries(machines.map(m => [m.id, { in: m.inN, out: m.outN }])),
+    savedAt: Date.now(),
+  }); };
 
   // ================= sounds (short, soft, synthesised) =================
   const sPop = () => { click(520 + Math.random() * 120, .06, .18, 'sine'); click(1100, .02, .06, 'triangle'); };
@@ -175,7 +254,7 @@ function runLevel(el, n, api) {
   // minus any whose zone is closed or whose `after` isn't built yet.
   const visibleTiles = () => TILES.filter(u => buildable.has(u.id) && !S.unlocked.has(u.id)).slice(0, SHOWN_UNLOCKS + LOOKAHEAD).filter(u => zoneOpen(zoneOfTile(u)) && (!u.after || on(u.after))).slice(0, SHOWN_UNLOCKS);
   function unlock(u) {
-    S.unlocked.add(u.id); delete S.partial[u.id];
+    S.unlocked.add(u.id); delete S.partial[u.id]; S.built++;
     const z = C.zones.find(zz => zz.id === u.id), h = C.helpers.find(hh => hh.id === u.id);
     if (h) spawnHelper(h);
     groundCv = art.ground(on);
@@ -332,6 +411,7 @@ function runLevel(el, n, api) {
     while (floaters.length && floaters[0].t > 1.2) floaters.shift();
     shake = Math.max(0, shake - dt);
     // the clock and the goals
+    if (free) { saveT -= dt; if (saveT <= 0) { saveT = 3; save(); } return; }
     S.timeLeft -= dt;
     if (S.timeLeft <= 10 && Math.ceil(S.timeLeft) !== Math.ceil(S.timeLeft + dt)) { click(1300, .03, .1, 'square'); buzz(8); }
     if (S.phase === 'play' && goals().every(gl => gl.done)) finish(true);
@@ -344,18 +424,23 @@ function runLevel(el, n, api) {
       if (gl.crows !== undefined) return { ...gl, have: S.crowLost, need: gl.crows, done: S.crowLost <= gl.crows, limit: true, text: goalText(gl) };
       const [have, need] = gl.earn ? [S.earned, gl.earn] : gl.sell ? [S.sold[gl.sell] || 0, gl.n] : gl.serve ? [S.served, gl.serve] :
         gl.fill ? [Object.entries(gl.fill).reduce((a, [p, k]) => a + Math.min(k, cart.got[p] || 0), 0), Object.values(gl.fill).reduce((a, k) => a + k, 0)] :
-        gl.orders ? [orders.done, gl.orders] : gl.streak ? [S.bestStreak, gl.streak] : gl.inspect ? [insp.passed, gl.inspect.at.length] : [on(gl.build) ? 1 : 0, 1];
+        gl.builds ? [S.built, gl.builds] : gl.orders ? [orders.done, gl.orders] : gl.streak ? [S.bestStreak, gl.streak] : gl.inspect ? [insp.passed, gl.inspect.at.length] : [on(gl.build) ? 1 : 0, 1];
       return { ...gl, have: Math.min(have, need), need, done: have >= need, text: goalText(gl) };
     });
   }
   const goalList = () => goals().map(gl => `<p style="margin:0 0 6px">${gl.limit ? (gl.done ? '🛡️' : '❌') : gl.done ? '✅' : '🎯'} <b>${gl.text}</b>${gl.limit ? ` <span style="opacity:.7">(lost ${gl.have})</span>` : gl.need > 1 ? ` <span style="opacity:.7">(${fmt(gl.have)}/${fmt(gl.need)})</span>` : ''}</p>`).join('');
+  const shopBtn = () => `<button class="btn fm-shopbtn">${META.icon} Seed Shop · ${loadMeta().seeds}</button>`;
+  const wireShop = () => { const ov = el.querySelector('.ov:last-child'), b = ov?.querySelector('.fm-shopbtn'); if (b) b.onclick = () => metaShop(el, () => { b.textContent = `${META.icon} Seed Shop · ${loadMeta().seeds}`; }); };
   function intro() {
+    const m = loadMeta(), extra = metaValue(m, 'time');
     panel(el, {
-      title: `Level ${n}: ${L.name}`,
-      html: `<p style="text-align:center;margin-bottom:10px">Beat the goal${L.goals.length > 1 ? 's' : ''} in <b>${mmss(L.time)}</b></p>${goalList()}` +
-        (L.build.length ? `<p style="margin-top:8px">To build: ${L.build.map(id => TILES.find(u => u.id === id).icon).join(' ')}</p>` : ''),
-      buttons: [{ label: 'Levels', onClick: () => api.pick() }, { label: 'Start', primary: true, onClick: () => { S.phase = 'play'; last = performance.now(); sChime(false); } }],
+      title: L.mega ? `Level ${n}: MEGA EXPANSION` : `Level ${n}: ${L.name}`, mood: L.mega ? 'mega' : undefined,
+      html: (L.mega ? `<p style="text-align:center;margin-bottom:6px"><b>${L.name.replace('Mega Expansion: ', '')}</b>: one long build-out. Seeds x${META.reward.megaMult}.</p>` : '') +
+        `<p style="text-align:center;margin-bottom:10px">Beat the goal${L.goals.length > 1 ? 's' : ''} in <b>${mmss(L.time + extra)}</b>${extra ? ` <small>(+${extra}s from the shop)</small>` : ''}</p>${goalList()}` +
+        (L.build.length ? `<p style="margin-top:8px">To build: ${L.build.map(id => TILES.find(u => u.id === id).icon).join(' ')}</p>` : '') + shopBtn(),
+      buttons: [{ label: 'Levels', onClick: () => api.pick() }, { label: 'Start', primary: true, onClick: () => { applyMeta(); S.phase = 'play'; last = performance.now(); sChime(false); } }],
     });
+    wireShop();
   }
   function finish(won, reason = '') {
     if (S.phase !== 'play') return;
@@ -363,27 +448,41 @@ function runLevel(el, n, api) {
     S.phase = 'done'; closeSheet(); joy.on = false; joy.dx = joy.dy = 0; joyEl.style.display = 'none';
     const isLast = n >= LEVELS.length;
     if (won) {
-      const stars = starsFor(S.timeLeft, L.time);
+      const stars = starsFor(S.timeLeft, L.time), prev = api.prog.stars(n);
       api.prog.complete(n, stars);
+      const seeds = seedsFor(stars, prev, L.mega), m = loadMeta(); m.seeds += seeds; m.total += seeds; saveMeta(m);
       confetti(root, 140); shake = .3; [784, 988, 1175, 1568].forEach((f, i) => setTimeout(() => tone(f), i * 110)); buzz(50);
       setTimeout(() => !dead && panel(el, {
         title: isLast ? 'You beat every level!' : `Level ${n} complete!`, mood: 'win',
-        html: `${starsHTML(stars)}<p style="text-align:center">Done with <b>${mmss(S.timeLeft)}</b> to spare.${stars < 3 ? ` Finish with ${mmss(L.time * STAR_TIME_LEFT[stars === 1 ? 1 : 0])} left for ${stars === 1 ? 'two' : 'three'} stars.` : ''}</p>`,
+        html: `${starsHTML(stars)}<p style="text-align:center">Done with <b>${mmss(S.timeLeft)}</b> to spare.${stars < 3 ? ` Finish with ${mmss(L.time * STAR_TIME_LEFT[stars === 1 ? 1 : 0])} left for ${stars === 1 ? 'two' : 'three'} stars.` : ''}</p>` +
+          `<p style="text-align:center;font-size:22px;margin:6px 0"><b>+${META.icon} ${seeds}</b> seeds</p>` + shopBtn(),
         buttons: [{ label: 'Levels', onClick: () => api.pick() }, { label: 'Retry', onClick: () => api.start(n) },
           ...(isLast ? [] : [{ label: 'Next level', primary: true, onClick: () => api.start(n + 1) }])],
-      }), 700);
+      }) && wireShop(), 700);
     } else {
       click(220, .35, .25, 'sine'); buzz(30);
       panel(el, {
         title: reason ? 'Level failed' : "Time's up!", mood: 'lose',
-        html: `<p style="text-align:center;margin-bottom:10px">${reason || "Here's how far you got:"}</p>${goalList()}`,
+        html: `<p style="text-align:center;margin-bottom:10px">${reason || "Here's how far you got:"}</p>${goalList()}` + shopBtn(),
         buttons: [{ label: 'Levels', onClick: () => api.pick() }, { label: 'Try again', primary: true, onClick: () => api.start(n) }],
       });
+      wireShop();
     }
   }
   function pauseMenu() {
     if (S.phase !== 'play') return;
     S.paused = true;
+    if (free) {
+      const built = UNLOCKS.filter(u => S.unlocked.has(u.id)).length;
+      panel(el, {
+        title: 'Free Farm', html: `<p style="text-align:center">Built <b>${built}/${UNLOCKS.length}</b> · earned <b>🪙 ${fmt(S.earned)}</b><br>Saved as you play. Helpers keep earning while you're away.</p>`,
+        buttons: [{ label: 'Start over', onClick: () => panel(el, { title: 'Start over?', html: '<p style="text-align:center">This wipes your Free Farm.</p>', buttons: [
+            { label: 'Keep it', primary: true, onClick: () => { S.paused = false; last = performance.now(); } },
+            { label: 'Wipe it', onClick: () => { writeSave('farm-free', null); api.start(0); } }] }) },
+          { label: 'Back to farming', primary: true, onClick: () => { S.paused = false; last = performance.now(); } }],
+      });
+      return;
+    }
     panel(el, {
       title: 'Paused', html: `<p style="text-align:center">Level ${n}: ${L.name} · ${mmss(S.timeLeft)} left</p>${goalList()}`,
       buttons: [{ label: 'Levels', onClick: () => api.pick() }, { label: 'Restart', onClick: () => api.start(n) }, { label: 'Resume', primary: true, onClick: () => { S.paused = false; last = performance.now(); } }],
@@ -411,7 +510,7 @@ function runLevel(el, n, api) {
           const other = can.filter(p => p !== kinds[0]); if (other.length && Math.random() < .75) kinds.push(other[Math.floor(Math.random() * other.length)]);
           const total = C.vip.items[0] + Math.floor(Math.random() * (C.vip.items[1] - C.vip.items[0] + 1)), want = {};
           for (let i = 0; i < total; i++) { const p = kinds[i % kinds.length]; want[p] = (want[p] || 0) + 1; }
-          orders.vip = { x: C.customers.spawn.x, y: C.customers.spawn.y, look: 1, walk: 0, state: 'in', want, got: {}, coming: {}, wait: C.vip.patience };
+          orders.vip = { x: C.customers.spawn.x, y: C.customers.spawn.y, look: 1, walk: 0, state: 'in', want, got: {}, coming: {}, wait: C.vip.patience + bonus.patience };
           float(C.vip.spot.x, C.vip.spot.y - 1.6, '⭐ Special order!', '#FFD23F'); tone(1319);
         }
       } else if (v.state === 'in') {
@@ -420,7 +519,7 @@ function runLevel(el, n, api) {
       } else if (v.state === 'wait') {
         v.wait -= dt;
         if (Object.entries(v.want).every(([p, k]) => (v.got[p] || 0) >= k)) {
-          const pay = Object.entries(v.want).reduce((a, [p, k]) => a + C.products[p].price * k, 0) * C.vip.bonus;
+          const pay = Math.round(Object.entries(v.want).reduce((a, [p, k]) => a + C.products[p].price * k, 0) * C.vip.bonus * bonus.prices);
           S.coins += pay; S.earned += pay; orders.done++; v.state = 'out'; v.happy = 1;
           coinsTo(v, 14); float(v.x, v.y - 1.8, `Order filled! +${pay}`, '#FFD23F'); sChime(true); buzz(30); burst(v.x, v.y - 1, '#FFD23F', 14); orders.t = C.vip.every;
         } else if (v.wait <= 0) { v.state = 'out'; v.sad = 1; orders.missed++; float(v.x, v.y - 1.8, 'Too slow 😤', '#FF8A66'); click(220, .2, .2, 'sine'); orders.t = C.vip.every; }
@@ -441,7 +540,7 @@ function runLevel(el, n, api) {
       }
       for (const c of [...crows]) {
         c.t += dt; c.flap += dt * 14;
-        if (c.state !== 'flee' && d2(P, c.plot) < C.crows.scare) { c.state = 'flee'; c.t = 0; c.fx = c.x; c.fy = c.y; click(1400, .06, .14, 'square'); buzz(8); burst(c.x, c.y - .3, '#2B1D3A', 6); float(c.x, c.y - 1.2, 'Shoo!', '#FFFFFF'); }
+        if (c.state !== 'flee' && d2(P, c.plot) < C.crows.scare + bonus.scare) { c.state = 'flee'; c.t = 0; c.fx = c.x; c.fy = c.y; click(1400, .06, .14, 'square'); buzz(8); burst(c.x, c.y - .3, '#2B1D3A', 6); float(c.x, c.y - 1.2, 'Shoo!', '#FFFFFF'); }
         if (c.state === 'fly') { const k = Math.min(1, c.t / C.crows.fly); c.x = c.fx + (c.plot.x - c.fx) * k; c.y = c.fy + (c.plot.y - .1 - c.fy) * k - Math.sin(k * Math.PI) * 1.2; if (k >= 1) { c.state = 'peck'; c.t = 0; } }
         else if (c.state === 'peck') {
           if (c.plot.g < c.plot.field.grow) { c.state = 'flee'; c.t = 0; c.fx = c.x; c.fy = c.y; } // harvested first
@@ -569,7 +668,7 @@ function runLevel(el, n, api) {
       checkoutT += dt / time;
       if (checkoutT >= 1) {
         checkoutT = 0;
-        const pay = front.got.reduce((a, p) => a + C.products[p].price, 0);
+        const pay = Math.round(front.got.reduce((a, p) => a + C.products[p].price, 0) * bonus.prices);
           S.coins += pay; S.earned += pay; S.served++; for (const p of front.got) S.sold[p] = (S.sold[p] || 0) + 1;
           S.streak++; S.bestStreak = Math.max(S.bestStreak, S.streak);
           if (gStreak && S.streak > 1) float(front.x, front.y - 2.1, `${S.streak} in a row!`, '#4FE378');
@@ -774,7 +873,7 @@ function runLevel(el, n, api) {
         rr(g, bx, by, bw, T * .8, T * .22); g.fillStyle = '#FFFFFF'; g.fill(); g.lineWidth = 3; g.strokeStyle = INK; g.stroke();
         g.font = `600 ${T * .24}px Fredoka, sans-serif`; g.textAlign = 'left';
         entries.forEach(([p, k], j) => { const ix = bx + T * .32 + j * T * .95, left = k - (v.got[p] || 0); drawItem(p, ix, by + T * .33, .62); g.fillStyle = left <= 0 ? '#2E9E5B' : INK; g.fillText(left <= 0 ? '✓' : '×' + left, ix + T * .2, by + T * .42); });
-        const k = Math.max(0, v.wait / C.vip.patience);
+        const k = Math.max(0, v.wait / (C.vip.patience + bonus.patience));
         rr(g, bx + T * .12, by + T * .6, bw - T * .24, T * .1, T * .05); g.fillStyle = 'rgba(43,29,58,.15)'; g.fill();
         rr(g, bx + T * .12, by + T * .6, (bw - T * .24) * k, T * .1, T * .05); g.fillStyle = k > .35 ? '#4FE378' : '#FF8A66'; g.fill();
       }
@@ -843,11 +942,15 @@ function runLevel(el, n, api) {
     let html;
     if (ob.text) html = `<span>👉 ${ob.text}</span>`;
     else if (insp.warning) html = `<span>📋 Inspector checks the ${ICON[insp.stall.product]} stall in <b>${Math.ceil(insp.warning)}s</b>: ${insp.stall.stock}/${gInspect.inspect.min}</span>`;
+    else if (free) {
+      const gl = ob.goal; const have = gl ? Math.min(gl.price, S.coins + (S.partial[gl.id] || 0)) : 0;
+      html = gl ? `<span>🎯 ${gl.icon} ${gl.label} <b>🪙${fmt(have)}/${fmt(gl.price)}</b></span><span class="bar"><i style="width:${100 * have / gl.price}%"></i></span>` : '<span>🏆 Everything built! Enjoy your farm.</span>';
+    }
     else {
       const gs = goals(), cur = gs.find(gl => !gl.done) || gs[gs.length - 1], frac = gs.reduce((a, gl) => a + gl.have / gl.need, 0) / gs.length;
       html = `<span>🎯 ${cur.text} <b>${cur.need > 1 ? fmt(cur.have) + '/' + fmt(cur.need) : ''}</b>${gs.length > 1 ? ` <b>· ${gs.filter(gl => gl.done).length}/${gs.length}</b>` : ''}</span><span class="bar"><i style="width:${100 * frac}%"></i></span>`;
     }
-    setText(timeTxt, mmss(S.timeLeft)); const low = S.phase === 'play' && S.timeLeft <= 15; if (timeEl.classList.contains('low') !== low) timeEl.classList.toggle('low', low);
+    if (!free) setText(timeTxt, mmss(S.timeLeft)); const low = S.phase === 'play' && S.timeLeft <= 15; if (timeEl.classList.contains('low') !== low) timeEl.classList.toggle('low', low);
     if (html !== questKey) { questKey = html; questEl.innerHTML = html; }
     if (sheetFor) { // re-render only when what you can afford changes, so taps aren't swallowed
       const k = Object.entries(C.upgrades).map(([id, u]) => S.coins >= (u.cost[S.up[id] || 0] ?? Infinity) ? 1 : 0).join('');
@@ -859,7 +962,7 @@ function runLevel(el, n, api) {
   function frame(now) {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     const t0 = performance.now();
-    if (document.visibilityState === 'visible' && S.phase === 'play' && !S.paused) update(dt); // the clock stops when the app is hidden
+    if (document.visibilityState === 'visible' && S.phase === 'play' && !S.paused && !offlinePanel) update(dt); // the clock stops when the app is hidden
     const t1 = performance.now();
     for (const c of coinsFx) c.t += dt;
     const tx = P.x + P.vx * .22 - W / T / 2, ty = P.y + P.vy * .22 - H / T / 2 - .8; // look a little ahead
@@ -880,12 +983,34 @@ function runLevel(el, n, api) {
     if (nt !== T || !art) { T = nt; art = createArt(T, dpr); groundCv = art.ground(on); }
   }
 
-  const onVis = () => { if (document.visibilityState === 'visible') last = performance.now(); };
+  function offlineEarnings(seconds) {
+    if (!free || seconds < C.offline.minSeconds) return;
+    const secs = Math.min(seconds, C.offline.maxHours * 3600);
+    const amt = Math.floor(automatedRate(S.unlocked, S.up) * secs * C.offline.efficiency);
+    for (const f of fields) for (const pl of f.plots) pl.g = f.grow; // crops kept growing
+    if (amt <= 0) return;
+    const hrs = Math.floor(secs / 3600), mins = Math.round(secs % 3600 / 60);
+    offlinePanel = panel(el, {
+      title: 'While you were away', mood: 'win',
+      html: `<p style="text-align:center;font-size:34px;margin:4px 0 6px;color:#FFD23F;font-weight:600">+🪙 ${fmt(amt)}</p>` +
+        `<p style="text-align:center">Your helpers kept the farm running for ${hrs ? hrs + 'h ' : ''}${mins}m.${seconds > secs ? ` (Earnings stop after ${C.offline.maxHours}h.)` : ''}</p>`,
+      buttons: [{ label: 'Collect', primary: true, onClick: () => { offlinePanel = null; S.coins += amt; S.earned += amt; coinsTo({ x: camX + W / T / 2, y: camY + H / T / 2 }, 14); sChime(true); save(); last = performance.now(); } }],
+    });
+  }
+  let hiddenAt = 0;
+  const onVis = () => {
+    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); save(); return; }
+    last = performance.now();
+    if (hiddenAt && free && !offlinePanel) offlineEarnings((Date.now() - hiddenAt) / 1000);
+    hiddenAt = 0;
+  };
+  window.addEventListener('pagehide', save);
   document.addEventListener('visibilitychange', onVis);
 
   const ro = new ResizeObserver(resize); ro.observe(root); resize();
   camX = P.x - W / T / 2; camY = P.y - H / T / 2;
-  intro();
+  if (free) { timeEl.textContent = '☰'; timeEl.setAttribute('aria-label', 'Menu'); if (sv.savedAt) offlineEarnings((Date.now() - sv.savedAt) / 1000); }
+  else intro();
 
   // handle for the automated checks (scripts/verify.mjs, tests); not used by the game
   root._dbg = { crows, orders, cart, insp, L, n, goals, focus, go() { el.querySelectorAll('.ov').forEach(o => o.remove()); S.phase = 'play'; }, perf, unlock: id => unlock(TILES.find(u => u.id === id)), S, P, on, cap, fields, pens, machines, stands, crates, helpers, customers, visibleTiles, sinks, sources, save, update, objective, flying, get coins() { return S.coins; }, set coins(v) { S.coins = v; coinShown = v; } };
@@ -893,7 +1018,7 @@ function runLevel(el, n, api) {
   return () => {
     dead = true; cancelAnimationFrame(raf); ro.disconnect(); save();
     window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku);
-    document.removeEventListener('visibilitychange', onVis);
+    document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', save);
     el.querySelectorAll('.ov').forEach(o => o.remove());
   };
 }

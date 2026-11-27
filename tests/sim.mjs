@@ -129,6 +129,17 @@ check('farm levels: every goal is reachable with what the level starts with or c
   });
   console.log(`     ${FL.length} levels, ${FL.map(L => Math.round(L.time / 60 * 10) / 10 + 'm').join(' ')}`);
 });
+const { seedsFor, automatedRate } = await import('../src/games/farm.js');
+check('farm seeds: first win, new stars and megas pay; replays pay a little', () => {
+  assert.equal(seedsFor(3, 0, false), 14); assert.equal(seedsFor(3, 0, true), 28);
+  assert.equal(seedsFor(3, 3, false), 1, 'replaying a 3-star level pays the replay seed only');
+  assert.equal(seedsFor(3, 1, false), 7, 'two new stars + replay');
+});
+check('free farm offline earnings: zero until a chain is automated, then positive', () => {
+  assert.equal(automatedRate(new Set()), 0);
+  assert.equal(automatedRate(new Set(['hand_carrot', 'carrier1'])), 0, 'no cashier: nothing sells');
+  assert.ok(automatedRate(new Set(['hand_carrot', 'carrier1', 'cashier'])) > 0);
+});
 check('farm stars: more time left, more stars', () => {
   assert.equal(starsFor(100, 100), 3); assert.equal(starsFor(STAR_TIME_LEFT[0] * 100, 100), 3);
   assert.equal(starsFor(20, 100), 2); assert.equal(starsFor(1, 100), 1);

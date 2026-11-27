@@ -83,7 +83,7 @@ try {
   // ---- 2. offline ----
   await ctx.setOffline(true);
   await page.reload();
-  ok(await page.waitForFunction(() => document.querySelectorAll('.tile').length === 5, null, { timeout: 5000 }).then(() => true, () => false), 'offline reload: home screen with 5 games');
+  ok(await page.waitForFunction(() => document.querySelectorAll('.tile').length === 6, null, { timeout: 5000 }).then(() => true, () => false), 'offline reload: home screen with 6 games');
   ok(await page.evaluate(() => document.getElementById('home').getBoundingClientRect().height > innerHeight * .8), 'home screen fills the height (hidden play area takes no space)');
   ok(await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('600 20px Fredoka'); }), 'offline reload: Fredoka font loaded from cache');
   const cold = watch(await ctx.newPage());
@@ -133,6 +133,11 @@ try {
   ok(picked >= 2, `farm: walking over carrots picks them (${picked} on your back)`);
   await page.evaluate(() => { const d = document.querySelector('.fm')._dbg; d.P.x = d.stands[0].at.x; d.P.y = d.stands[0].at.y + .3; });
   ok(await page.waitForFunction(() => document.querySelector('.fm')._dbg.stands[0].stock > 0, null, { timeout: 3000 }).then(() => true, () => false), 'farm: standing at the stand stocks it');
+  await page.click('#back');
+
+  // --- Free Farm: no clock, straight into play ---
+  await page.click('.tile[data-go="farm-free"]'); await page.waitForFunction(() => document.querySelector('.fm')?._dbg, null, { timeout: 5000 });
+  ok(!(await page.locator('.panel').count()) && (await page.textContent('.fm-time')).includes('☰'), 'free farm: opens straight into play with a menu, no clock');
   await page.click('#back');
 
   // --- Tiny Inn: walk with the keyboard, then check a guest in at the desk ---
