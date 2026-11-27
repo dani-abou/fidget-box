@@ -2,14 +2,12 @@
 
 Ad-free games, as an installable PWA that works fully offline:
 
-- **Sunny Acres**: an arcade-idle farm. Drag anywhere to walk; everything
-  happens by walking onto things. Pick crops (they stack on your back), stock
-  the market stalls, work the register, and stand on price tiles to build:
-  more fields, a chicken coop, a mill and bakery, cows and a cheese press,
-  pumpkins, sheep, and helpers (farmhands, carriers, a cashier) that keep the
-  farm running. Upgrades at the blue mat. Saves every few seconds; when you
-  come back, automated chains pay out "while you were away". See
-  [Sunny Acres: balancing](#sunny-acres-balancing) below.
+- **Sunny Acres**: an arcade-idle farm in 12 timed levels. Drag anywhere to
+  walk; everything happens by walking onto things. Pick crops (they stack on
+  your back), stock the market stalls, work the register, and stand on price
+  tiles to build. Each level hands you a farm, a few things to build, a goal
+  (earn, sell, serve or build) and a clock; finish with time to spare for
+  stars. See [Sunny Acres: balancing](#sunny-acres-balancing) below.
 - **Tiny Inn**: run a little hotel. Drag anywhere to walk. Check guests in
   at the desk, walk over the cash, clean messy rooms (run over the trash, bin
   it, make the bed), and spend cash on build pads: rooms, a clerk,
@@ -49,7 +47,7 @@ npm run verify   # npm test + headless Chromium: offline, plays each game, updat
 npm run icons    # re-render src/icons/*.png from scripts/icon.svg (only if the art changes)
 npm run levels   # regenerate src/data/slide-levels.json (~5 min; output is committed)
 npm run words    # regenerate src/data/words.txt (needs `npm i --no-save wordlist-english`)
-npm run farm:pace -- 40   # Sunny Acres: a bot plays 40 game-minutes in seconds, prints unlock timings
+npm run farm:pace        # Sunny Acres: a bot plays every level in seconds, prints its times vs the limits
 ```
 
 `verify` and `icons` need Playwright (`npm i -g playwright && npx playwright install chromium`).
@@ -158,24 +156,23 @@ branch (`railway.json`: Railpack, `npm run build`, `npm start`, health check
 
 ## Sunny Acres: balancing
 
-Files: `src/games/farm.js` (game loop), `src/games/farm/config.js` (every
-number, the layout and the unlock order), `src/games/farm/art.js` (all
-drawing). To rebalance, edit only `config.js`, then run `npm run farm:pace`
-to see when each unlock lands. Things you'll most likely tweak:
+Files: `src/games/farm.js` (game loop and level flow),
+`src/games/farm/config.js` (every number, the layout, the build order and the
+levels), `src/games/farm/art.js` (all drawing). To rebalance, edit only
+`config.js`, then run `npm run farm:pace`: a bot plays every level at the
+player's walking speed (fast-forwarded) and prints its time against each
+limit. Limits are set to about 1.7x the bot's slowest of three runs.
 
 | Config | What it changes |
 | --- | --- |
-| `UNLOCKS[].price` and their order | The whole progression. Three tiles show at a time (`SHOWN_UNLOCKS`), taken from the next few in order (`LOOKAHEAD`). `after:` hides a tile until something else is built. |
-| `products.*.price` | What each item sells for. Raise late items to make later zones feel like a step up. |
-| `fields[].grow`, `pens[].interval` / `animals` | How fast crops and animals produce. |
-| `machines[].time` | Seconds per item through the mill, bakery and press. |
-| `customers.every`, `everyPerStand`, `buyMin`/`buyMax` | Demand. Often the real cap on early income. |
-| `upgrades.*.levels` / `cost` | Run speed, basket size, harvest speed, helper speed and basket, machine speed. |
-| `register.playerTime` / `cashierTime` | Checkout speed: you vs the cashier. |
-| `offline.efficiency`, `maxHours` | "While you were away" payout: automated coins/sec x time away x efficiency, capped. 0.1 is about 10 active minutes per hour away. |
-| `UNLOCK_SECONDS` | How long coins take to drain into a tile. |
+| `LEVELS[]` | Each level: `start` (already built), `coins`, `build` (tiles you can buy), `goals` (`earn`, `sell`, `serve`, `build`), `time`, `priceScale` (discounts that level's tiles). |
+| `STAR_TIME_LEFT` | Stars by time left: 30%+ = 3, 10%+ = 2. |
+| `UNLOCKS[].price` and order | Base tile prices and the order tiles appear in (3 at a time). `after:` hides a tile until something else is built. |
+| `products.*.price` | What each item sells for. |
+| `fields[].grow`, `pens[].interval` / `animals`, `machines[].time` | Production speed. |
+| `customers.every`, `buyMin`/`buyMax` | Demand, often the cap on income. |
+| `upgrades.*.levels` / `cost` | Speed, basket, harvest, helper and machine upgrades (reset each level). |
+| `UNLOCK_SECONDS`, `UNLOCK_DWELL` | How fast coins drain into a tile, and how long you stand before they start (walking across is free). |
 
-Current pacing from `npm run farm:pace`: the first unlock at about 20 s, the
-gaps mostly 20 s to 2 min, the whole farm in about 30 minutes of play.
-`npm test` also checks the config (every unlock names a real thing, `after`
-points earlier, the first unlock is paid by one harvest).
+`npm test` checks every level can be won from its config (a stand and a
+source for each sell goal, nothing behind a fence the level can't open).

@@ -83,12 +83,12 @@ try {
   // ---- 2. offline ----
   await ctx.setOffline(true);
   await page.reload();
-  ok(await page.locator('.tile').count() === 5, 'offline reload: home screen with 5 games');
+  ok(await page.waitForFunction(() => document.querySelectorAll('.tile').length === 5, null, { timeout: 5000 }).then(() => true, () => false), 'offline reload: home screen with 5 games');
   ok(await page.evaluate(() => document.getElementById('home').getBoundingClientRect().height > innerHeight * .8), 'home screen fills the height (hidden play area takes no space)');
   ok(await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('600 20px Fredoka'); }), 'offline reload: Fredoka font loaded from cache');
   const cold = watch(await ctx.newPage());
   await cold.goto(ORIGIN + '/?source=homescreen#slide');
-  ok((await cold.textContent('#title')) === 'Slide Free', 'offline cold start of a new tab (like launching from the home screen)');
+  ok(await cold.waitForFunction(() => document.getElementById('title').textContent === 'Slide Free', null, { timeout: 5000 }).then(() => true, () => false), 'offline cold start of a new tab (like launching from the home screen)');
   await cold.close();
 
   // --- Slide Free: solve level 1 by dragging blocks along a BFS solution ---
@@ -125,6 +125,8 @@ try {
 
   // --- Sunny Acres: walk onto the carrots, they stack on your back; drop them at the stand ---
   await page.click('.tile[data-go="farm"]'); await page.waitForFunction(() => document.querySelector('.fm')?._dbg, null, { timeout: 5000 });
+  ok(/Level 1/.test(await page.textContent('.panel h2')), 'farm: a level intro shows the goal before the clock starts');
+  await page.click('.panel .btn.primary'); // Start
   await page.evaluate(() => { const d = document.querySelector('.fm')._dbg; d.P.x = 1.5; d.P.y = 31.5; });
   await page.keyboard.down('ArrowRight'); await page.waitForTimeout(900); await page.keyboard.up('ArrowRight');
   const picked = await page.evaluate(() => document.querySelector('.fm')._dbg.P.stack.length);

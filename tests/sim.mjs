@@ -104,31 +104,31 @@ check('slide levels: each solvable in exactly its stated minimum', () => {
 // ---------- Sunny Acres ----------
 const { CONFIG: FC, UNLOCKS: FU } = await import('../src/games/farm/config.js');
 // farm.js reads browser globals only inside init(), so its pure helpers import fine here
-const { automatedRate } = await import('../src/games/farm.js');
-check('farm config: every unlock names a real thing, and `after` points earlier', () => {
-  const ids = new Set([...FC.fields, ...FC.pens, ...FC.machines, ...FC.stands, ...FC.zones, ...FC.helpers].map(e => e.id));
-  const seen = new Set([...FC.fields, ...FC.stands, ...FC.zones].filter(e => e.start).map(e => e.id));
-  for (const u of FU) {
-    assert.ok(ids.has(u.id), `unlock '${u.id}' has no matching field/pen/machine/stand/zone/helper`);
-    if (u.after) assert.ok(seen.has(u.after), `'${u.id}' is after '${u.after}', which isn't built earlier`);
-    assert.ok(u.price > 0 && u.at, `'${u.id}' needs a price and a spot`);
-    seen.add(u.id);
-  }
-  for (const m of FC.machines) assert.ok(FC.products[m.in] && FC.products[m.out], `machine ${m.id} uses unknown products`);
-  for (const s of FC.stands) assert.ok(FC.products[s.product]?.price > 0, `stand ${s.id} sells something with no price`);
+const { LEVELS: FL, STAR_TIME_LEFT } = await import('../src/games/farm/config.js');
+const { starsFor, goalText } = await import('../src/games/farm.js');
+check('farm levels: every goal is reachable with what the level starts with or can build', () => {
+  const startIds = [...FC.fields, ...FC.stands, ...FC.zones].filter(e => e.start).map(e => e.id);
+  const unlockIds = new Set(FU.map(u => u.id));
+  FL.forEach((L, i) => {
+    const tag = `level ${i + 1} (${L.name})`;
+    const have = new Set([...startIds, ...L.start, ...L.build]);
+    for (const id of [...L.start, ...L.build]) assert.ok(unlockIds.has(id), `${tag}: unknown id '${id}'`);
+    for (const id of L.build) { const u = FU.find(x => x.id === id); if (u.after) assert.ok(have.has(u.after), `${tag}: '${id}' needs '${u.after}', which this level never has`); }
+    const zoneOk = y => FC.zones.every(z => z.start || have.has(z.id) || y > z.fenceY);
+    for (const id of L.build) assert.ok(zoneOk(FU.find(u => u.id === id).at.y), `${tag}: '${id}' sits behind a fence this level can't open`);
+    const makes = p => FC.fields.some(f => f.crop === p && have.has(f.id)) || FC.pens.some(q => q.product === p && have.has(q.id)) || FC.machines.some(m => m.out === p && have.has(m.id) && makes(m.in));
+    for (const gl of L.goals) {
+      if (gl.sell) { assert.ok(FC.stands.some(st => st.product === gl.sell && have.has(st.id)), `${tag}: no ${gl.sell} stand`); assert.ok(makes(gl.sell), `${tag}: nothing makes ${gl.sell}`); }
+      if (gl.build) assert.ok(L.build.includes(gl.build), `${tag}: goal builds '${gl.build}' but it isn't on the build list`);
+      assert.ok(goalText(gl).length > 3);
+    }
+    assert.ok(L.time >= 60, `${tag}: time looks too short`);
+  });
+  console.log(`     ${FL.length} levels, ${FL.map(L => Math.round(L.time / 60 * 10) / 10 + 'm').join(' ')}`);
 });
-check('farm pacing: first unlock is paid by one round of the starter field', () => {
-  const start = FC.fields.find(f => f.start), coins = start.w * start.h * FC.products[start.crop].price;
-  assert.ok(FU[0].price <= coins, `first unlock ${FU[0].price} > one harvest worth ${coins}`);
-});
-check('farm offline earnings: zero until a chain is automated, then positive', () => {
-  assert.equal(automatedRate(new Set()), 0);
-  assert.equal(automatedRate(new Set(['hand_carrot', 'carrier1'])), 0, 'no cashier: nothing sells');
-  const r = automatedRate(new Set(['hand_carrot', 'carrier1', 'cashier']));
-  assert.ok(r > 0, 'farmhand + carrier + cashier should earn');
-  const all = automatedRate(new Set(FU.map(u => u.id)));
-  assert.ok(all > r, 'a bigger farm earns more');
-  console.log(`     offline coins/hour: starter automation ${Math.round(r * 3600 * FC.offline.efficiency)}, full farm ${Math.round(all * 3600 * FC.offline.efficiency)}`);
+check('farm stars: more time left, more stars', () => {
+  assert.equal(starsFor(100, 100), 3); assert.equal(starsFor(STAR_TIME_LEFT[0] * 100, 100), 3);
+  assert.equal(starsFor(20, 100), 2); assert.equal(starsFor(1, 100), 1);
 });
 
 console.log(fails ? `\n${fails} failed` : '\nall logic checks passed');
