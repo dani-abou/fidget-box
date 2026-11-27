@@ -107,7 +107,9 @@ export const CONFIG = {
   harvestTimeHelper: .5,
 
   // ---- offline earnings: only fully automated chains earn while you're away ----
-  offline: { efficiency: .6, maxHours: 3, minSeconds: 60 },
+  // coins = automated coins/sec (what helpers could sell) x seconds away x efficiency, up to maxHours.
+  // 0.1 makes an hour away worth roughly 10 minutes of active play.
+  offline: { efficiency: .1, maxHours: 4, minSeconds: 60 },
 };
 
 // The unlock tiles, in the order they appear. Three are on the ground at a time,

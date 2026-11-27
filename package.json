@@ -13,6 +13,7 @@
     "test": "node tests/sim.mjs",
     "verify": "node build.mjs && node tests/sim.mjs && node scripts/verify.mjs",
     "levels": "node scripts/make-slide-levels.mjs",
-    "words": "node scripts/make-words.mjs"
+    "words": "node scripts/make-words.mjs",
+    "farm:pace": "node scripts/farm-pace.mjs"
   }
 }

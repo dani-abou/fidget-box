@@ -2,6 +2,14 @@
 
 Ad-free games, as an installable PWA that works fully offline:
 
+- **Sunny Acres**: an arcade-idle farm. Drag anywhere to walk; everything
+  happens by walking onto things. Pick crops (they stack on your back), stock
+  the market stalls, work the register, and stand on price tiles to build:
+  more fields, a chicken coop, a mill and bakery, cows and a cheese press,
+  pumpkins, sheep, and helpers (farmhands, carriers, a cashier) that keep the
+  farm running. Upgrades at the blue mat. Saves every few seconds; when you
+  come back, automated chains pay out "while you were away". See
+  [Sunny Acres: balancing](#sunny-acres-balancing) below.
 - **Tiny Inn**: run a little hotel. Drag anywhere to walk. Check guests in
   at the desk, walk over the cash, clean messy rooms (run over the trash, bin
   it, make the bed), and spend cash on build pads: rooms, a clerk,
@@ -41,6 +49,7 @@ npm run verify   # npm test + headless Chromium: offline, plays each game, updat
 npm run icons    # re-render src/icons/*.png from scripts/icon.svg (only if the art changes)
 npm run levels   # regenerate src/data/slide-levels.json (~5 min; output is committed)
 npm run words    # regenerate src/data/words.txt (needs `npm i --no-save wordlist-english`)
+npm run farm:pace -- 40   # Sunny Acres: a bot plays 40 game-minutes in seconds, prints unlock timings
 ```
 
 `verify` and `icons` need Playwright (`npm i -g playwright && npx playwright install chromium`).
@@ -146,3 +155,27 @@ Offline, nothing changes: the app runs entirely from the cache.
 Railway project `fidget-box`, one service built from this repo's `main`
 branch (`railway.json`: Railpack, `npm run build`, `npm start`, health check
 `/healthz`). No environment variables are needed. Railway sets `PORT`.
+
+## Sunny Acres: balancing
+
+Files: `src/games/farm.js` (game loop), `src/games/farm/config.js` (every
+number, the layout and the unlock order), `src/games/farm/art.js` (all
+drawing). To rebalance, edit only `config.js`, then run `npm run farm:pace`
+to see when each unlock lands. Things you'll most likely tweak:
+
+| Config | What it changes |
+| --- | --- |
+| `UNLOCKS[].price` and their order | The whole progression. Three tiles show at a time (`SHOWN_UNLOCKS`), taken from the next few in order (`LOOKAHEAD`). `after:` hides a tile until something else is built. |
+| `products.*.price` | What each item sells for. Raise late items to make later zones feel like a step up. |
+| `fields[].grow`, `pens[].interval` / `animals` | How fast crops and animals produce. |
+| `machines[].time` | Seconds per item through the mill, bakery and press. |
+| `customers.every`, `everyPerStand`, `buyMin`/`buyMax` | Demand. Often the real cap on early income. |
+| `upgrades.*.levels` / `cost` | Run speed, basket size, harvest speed, helper speed and basket, machine speed. |
+| `register.playerTime` / `cashierTime` | Checkout speed: you vs the cashier. |
+| `offline.efficiency`, `maxHours` | "While you were away" payout: automated coins/sec x time away x efficiency, capped. 0.1 is about 10 active minutes per hour away. |
+| `UNLOCK_SECONDS` | How long coins take to drain into a tile. |
+
+Current pacing from `npm run farm:pace`: the first unlock at about 20 s, the
+gaps mostly 20 s to 2 min, the whole farm in about 30 minutes of play.
+`npm test` also checks the config (every unlock names a real thing, `after`
+points earlier, the first unlock is paid by one harvest).

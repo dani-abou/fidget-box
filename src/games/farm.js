@@ -466,7 +466,8 @@ export default {
     function drawStack(ch, stack, x, y) {
       const n = stack.length; if (!n) return;
       const sway = -(ch.vx || 0) * .012 * T;
-      for (let i = 0; i < n; i++) { const it = stack[i]; drawItem(it.t, x + sway * i * .5 - ch.look * T * .05, y - T * (1.12 + i * .25), easeBack(it.pop)); }
+      const gap = Math.min(.25, 3.2 / n); // tall stacks squeeze together instead of towering off screen
+      for (let i = 0; i < n; i++) { const it = stack[i]; drawItem(it.t, x + sway * i * .5 - ch.look * T * .05, y - T * (1.12 + i * gap), easeBack(it.pop)); }
     }
     function drawPile(type, at, n, cols = 4) {
       for (let i = 0; i < n; i++) { const c = i % cols, r = Math.floor(i / cols); drawItem(type, X(at.x) + (c - (cols - 1) / 2) * T * .3, Y(at.y) - r * T * .18 + T * .1, .85); }
@@ -495,7 +496,11 @@ export default {
       const sx = shake ? (Math.random() - .5) * shake * T * .5 : 0, sy = shake ? (Math.random() - .5) * shake * T * .5 : 0;
       g.translate(sx, sy);
       // static ground: one drawImage of the visible slice
-      g.fillStyle = '#86CF62'; g.fillRect(-20, -20, W + 40, H + 40);
+      // the ground image covers the view; only paint the strips beyond the map edges (saves a full-screen fill)
+      g.fillStyle = '#86CF62';
+      if (camX < 0) g.fillRect(-20, -20, -camX * T + 20, H + 40);
+      const right = (C.world.cols - camX) * T; if (right < W) g.fillRect(right, -20, W - right + 20, H + 40);
+      if (shake) g.fillRect(-20, -20, W + 40, 20), g.fillRect(-20, H, W + 40, 20);
       const gs = T * dpr;
       g.drawImage(groundCv, camX * gs, camY * gs, W * dpr, H * dpr, 0, 0, W, H);
       // crops
@@ -597,6 +602,7 @@ export default {
 
     // ================= HUD =================
     let questKey = '', sheetKey = '';
+    const perf = { update: 0, draw: 0, hud: 0 };
     function hud(ob) {
       coinShown += (S.coins - coinShown) * .18; if (Math.abs(S.coins - coinShown) < .5) coinShown = S.coins;
       coinTxt.textContent = fmt(Math.round(coinShown));
@@ -616,13 +622,16 @@ export default {
     // ================= loop =================
     function frame(now) {
       const dt = Math.min(.05, (now - last) / 1000); last = now;
+      const t0 = performance.now();
       if (document.visibilityState === 'visible' && !offlinePanel) update(dt);
+      const t1 = performance.now();
       for (const c of coinsFx) c.t += dt;
       const tx = P.x - W / T / 2, ty = P.y - H / T / 2 - .8;
       camX += (tx - camX) * Math.min(1, dt * 7); camY += (ty - camY) * Math.min(1, dt * 7);
       camX = Math.max(-.3, Math.min(C.world.cols + .3 - W / T, camX)); camY = Math.max(0, Math.min(C.world.rows - H / T, camY));
       if (W / T > C.world.cols) camX = (C.world.cols - W / T) / 2;
-      const ob = draw(now); hud(ob);
+      const ob = draw(now); const t2 = performance.now(); hud(ob);
+      perf.update += (t1 - t0 - perf.update) * .05; perf.draw += (t2 - t1 - perf.draw) * .05; perf.hud += (performance.now() - t2 - perf.hud) * .05; // running averages (ms)
       raf = requestAnimationFrame(frame);
     }
     function resize() {
@@ -659,7 +668,7 @@ export default {
     if (sv.savedAt) offlineEarnings((Date.now() - sv.savedAt) / 1000);
 
     // handle for the automated checks (scripts/verify.mjs, tests); not used by the game
-    root._dbg = { S, P, on, cap, fields, pens, machines, stands, crates, helpers, customers, visibleTiles, sinks, sources, save, update, objective, flying, get coins() { return S.coins; }, set coins(v) { S.coins = v; coinShown = v; } };
+    root._dbg = { perf, unlock: id => unlock(UNLOCKS.find(u => u.id === id)), S, P, on, cap, fields, pens, machines, stands, crates, helpers, customers, visibleTiles, sinks, sources, save, update, objective, flying, get coins() { return S.coins; }, set coins(v) { S.coins = v; coinShown = v; } };
     raf = requestAnimationFrame(frame);
     return () => {
       dead = true; cancelAnimationFrame(raf); ro.disconnect(); save();

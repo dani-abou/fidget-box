@@ -83,7 +83,7 @@ try {
   // ---- 2. offline ----
   await ctx.setOffline(true);
   await page.reload();
-  ok(await page.locator('.tile').count() === 4, 'offline reload: home screen with 4 games');
+  ok(await page.locator('.tile').count() === 5, 'offline reload: home screen with 5 games');
   ok(await page.evaluate(() => document.getElementById('home').getBoundingClientRect().height > innerHeight * .8), 'home screen fills the height (hidden play area takes no space)');
   ok(await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('600 20px Fredoka'); }), 'offline reload: Fredoka font loaded from cache');
   const cold = watch(await ctx.newPage());
@@ -121,6 +121,16 @@ try {
   ok(/\+\d/.test(await page.textContent('.lt-word')) && await page.locator('.lt-found span').count() === 1, `words: "${path.word}" scored (${(await page.textContent('#stage .stat')).trim()})`);
   await page.click('#stage .stop');
   ok(await page.waitForSelector('.panel h2', { timeout: 3000 }).then(() => true, () => false), 'words: Finish shows the result panel');
+  await page.click('#back');
+
+  // --- Sunny Acres: walk onto the carrots, they stack on your back; drop them at the stand ---
+  await page.click('.tile[data-go="farm"]'); await page.waitForFunction(() => document.querySelector('.fm')?._dbg, null, { timeout: 5000 });
+  await page.evaluate(() => { const d = document.querySelector('.fm')._dbg; d.P.x = 1.5; d.P.y = 31.5; });
+  await page.keyboard.down('ArrowRight'); await page.waitForTimeout(900); await page.keyboard.up('ArrowRight');
+  const picked = await page.evaluate(() => document.querySelector('.fm')._dbg.P.stack.length);
+  ok(picked >= 2, `farm: walking over carrots picks them (${picked} on your back)`);
+  await page.evaluate(() => { const d = document.querySelector('.fm')._dbg; d.P.x = d.stands[0].at.x; d.P.y = d.stands[0].at.y + .3; });
+  ok(await page.waitForFunction(() => document.querySelector('.fm')._dbg.stands[0].stock > 0, null, { timeout: 3000 }).then(() => true, () => false), 'farm: standing at the stand stocks it');
   await page.click('#back');
 
   // --- Tiny Inn: walk with the keyboard, then check a guest in at the desk ---

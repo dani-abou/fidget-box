@@ -101,5 +101,35 @@ check('slide levels: each solvable in exactly its stated minimum', () => {
   console.log(`     ${L.length} levels, minimum moves ${L[0].min} to ${L[L.length - 1].min}`);
 });
 
+// ---------- Sunny Acres ----------
+const { CONFIG: FC, UNLOCKS: FU } = await import('../src/games/farm/config.js');
+// farm.js reads browser globals only inside init(), so its pure helpers import fine here
+const { automatedRate } = await import('../src/games/farm.js');
+check('farm config: every unlock names a real thing, and `after` points earlier', () => {
+  const ids = new Set([...FC.fields, ...FC.pens, ...FC.machines, ...FC.stands, ...FC.zones, ...FC.helpers].map(e => e.id));
+  const seen = new Set([...FC.fields, ...FC.stands, ...FC.zones].filter(e => e.start).map(e => e.id));
+  for (const u of FU) {
+    assert.ok(ids.has(u.id), `unlock '${u.id}' has no matching field/pen/machine/stand/zone/helper`);
+    if (u.after) assert.ok(seen.has(u.after), `'${u.id}' is after '${u.after}', which isn't built earlier`);
+    assert.ok(u.price > 0 && u.at, `'${u.id}' needs a price and a spot`);
+    seen.add(u.id);
+  }
+  for (const m of FC.machines) assert.ok(FC.products[m.in] && FC.products[m.out], `machine ${m.id} uses unknown products`);
+  for (const s of FC.stands) assert.ok(FC.products[s.product]?.price > 0, `stand ${s.id} sells something with no price`);
+});
+check('farm pacing: first unlock is paid by one round of the starter field', () => {
+  const start = FC.fields.find(f => f.start), coins = start.w * start.h * FC.products[start.crop].price;
+  assert.ok(FU[0].price <= coins, `first unlock ${FU[0].price} > one harvest worth ${coins}`);
+});
+check('farm offline earnings: zero until a chain is automated, then positive', () => {
+  assert.equal(automatedRate(new Set()), 0);
+  assert.equal(automatedRate(new Set(['hand_carrot', 'carrier1'])), 0, 'no cashier: nothing sells');
+  const r = automatedRate(new Set(['hand_carrot', 'carrier1', 'cashier']));
+  assert.ok(r > 0, 'farmhand + carrier + cashier should earn');
+  const all = automatedRate(new Set(FU.map(u => u.id)));
+  assert.ok(all > r, 'a bigger farm earns more');
+  console.log(`     offline coins/hour: starter automation ${Math.round(r * 3600 * FC.offline.efficiency)}, full farm ${Math.round(all * 3600 * FC.offline.efficiency)}`);
+});
+
 console.log(fails ? `\n${fails} failed` : '\nall logic checks passed');
 process.exit(fails ? 1 : 0);
