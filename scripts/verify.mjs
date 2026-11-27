@@ -152,9 +152,9 @@ try {
   // --- Spades: bid, play three tricks, then reload and resume the same hand ---
   await page.click('.tile[data-go="spades"]');
   await page.waitForSelector('.sp-bidgo', { timeout: 12000 });
-  { // slide the bid picker: dragging left by ~3 numbers' width raises the bid from 1 to 4
+  { // slide the bid picker: dragging left by ~3 numbers' width (58px each) raises the bid from 1 to 4
     const bb = await page.locator('.sp-step .cur').boundingBox(), y = bb.y + bb.height / 2;
-    await page.mouse.move(bb.x + bb.width / 2, y); await page.mouse.down(); await page.mouse.move(bb.x + bb.width / 2 - 80, y, { steps: 8 }); await page.mouse.up();
+    await page.mouse.move(bb.x + bb.width / 2, y); await page.mouse.down(); await page.mouse.move(bb.x + bb.width / 2 - 180, y, { steps: 12 }); await page.mouse.up();
     ok((await page.textContent('.sp-step .cur')) === '4', `spades: sliding the bid picker changes the bid (1 -> ${await page.textContent('.sp-step .cur')})`);
   }
   await page.click('.sp-bidgo');

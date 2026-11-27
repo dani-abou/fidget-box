@@ -281,7 +281,11 @@ export default {
 .card .pip{position:absolute;right:-6%;bottom:-8%;font-size:calc(var(--cw,56px)*.9);line-height:1;opacity:.95}
 /* hand: a fan along an arc */
 .sp-hand{position:relative;height:calc(var(--cw,70px)*1.42 + 26px);flex:none;z-index:4}
-.sp-hand .card{position:absolute;bottom:6px;transform-origin:50% 130%;transition:transform .15s,filter .15s,bottom .15s}
+.sp-hand .card{position:absolute;bottom:6px;transform-origin:50% 130%;transition:transform .15s,filter .15s,bottom .15s;touch-action:none}
+.sp-hand .card .r{font-size:var(--rk);letter-spacing:0} /* sized to the visible strip so Q, K and 10 aren't covered by the next card */
+.sp-hand .card .s{top:calc(var(--rk) + 3px);font-size:calc(var(--rk) * .8)}
+.card .r.ten{letter-spacing:-.08em;transform:scaleX(.8);transform-origin:left top}
+.sp-hand .card.dragging{transition:none;z-index:99 !important;box-shadow:0 14px 24px rgba(0,0,0,.35);filter:none}
 .sp-hand .card.ok{bottom:20px}
 .sp-hand .card.no{filter:brightness(.6) saturate(.6)}
 /* bid picker */
@@ -338,8 +342,9 @@ export default {
     const timers = new Set();
     const later = (fn, ms) => { const t = setTimeout(() => { timers.delete(t); fn(); }, ms); timers.add(t); };
     let s = loadSave('spades'), closePanel = null, who = cast(1);
+    let drag = null, pendingHand = false, lastFrom = null; // hand gestures and the played card's starting spot
 
-    const cardHTML = c => `<span class="r">${RANKS[rank(c)]}</span><span class="s">${SUITS[suit(c)]}</span><span class="pip">${SUITS[suit(c)]}</span>`;
+    const cardHTML = c => `<span class="r${rank(c) === 8 ? ' ten' : ''}">${RANKS[rank(c)]}</span><span class="s">${SUITS[suit(c)]}</span><span class="pip">${SUITS[suit(c)]}</span>`;
     const cardLabel = c => `${RANKS[rank(c)]} of ${['clubs', 'diamonds', 'hearts', 'spades'][suit(c)]}`;
     const save = () => writeSave('spades', s);
     const nm = p => who[p].name;
@@ -411,9 +416,22 @@ export default {
       for (const t of s.trick) {
         if (trickEl.querySelector(`[data-c="${t.c}"]`)) continue;
         const d = document.createElement('div'); d.dataset.c = t.c;
-        d.className = `card t${t.p} fly${RED(t.c) ? ' red' : ''}`; d.setAttribute('aria-label', `${nm(t.p)}: ${cardLabel(t.c)}`); d.innerHTML = cardHTML(t.c);
+        const mine = t.p === 0 && lastFrom?.c === t.c;
+        d.className = `card t${t.p}${mine ? '' : ' fly'}${RED(t.c) ? ' red' : ''}`; d.setAttribute('aria-label', `${nm(t.p)}: ${cardLabel(t.c)}`); d.innerHTML = cardHTML(t.c);
         trickEl.append(d);
+        if (mine) { // FLIP: start exactly over the card you played, then glide to the table
+          const to = d.getBoundingClientRect(), fr = lastFrom.rect;
+          d.style.transition = 'none';
+          d.style.translate = `${fr.left + fr.width / 2 - (to.left + to.width / 2)}px ${fr.top + fr.height / 2 - (to.top + to.height / 2)}px`;
+          d.style.scale = String(fr.width / to.width);
+          void d.offsetWidth;
+          d.style.transition = 'translate .3s cubic-bezier(.2,.8,.3,1), scale .3s cubic-bezier(.2,.8,.3,1)';
+          d.style.translate = '0px 0px'; d.style.scale = '1';
+          later(() => { d.style.transition = ''; d.style.translate = ''; d.style.scale = ''; }, 320); // hand back to the slide-to-winner animation
+          lastFrom = null;
+        }
       }
+      msg.textContent = s.phase === 'play' && s.turn === 0 ? (s.trick.length ? 'Your turn' : 'Your lead') : '';
       // your hand along an arc
       const L = s.phase === 'play' && s.turn === 0 ? legal(s.hands[0], s.trick, s.broken) : [];
       const W = handEl.clientWidth || el.clientWidth, n = s.hands[0].length;
@@ -421,18 +439,47 @@ export default {
       handEl.style.setProperty('--cw', cw + 'px');
       trickEl.style.setProperty('--cw', Math.round(Math.min(66, W / 6.2, table.clientHeight / 5.6)) + 'px');
       const stepX = n > 1 ? Math.min(cw * .62, (W - cw - 30) / (n - 1)) : 0, x0 = (W - (stepX * (n - 1) + cw)) / 2; // 30px spare for the arc's lean
+      handEl.style.setProperty('--rk', Math.round(Math.max(16, Math.min(cw * .44, stepX * 1.05 + 1))) + 'px');
+      if (drag) { pendingHand = true; return; } // never rebuild the hand under a finger
       handEl.innerHTML = '';
       s.hands[0].forEach((c, i) => {
         const b = document.createElement('button'), off = i - (n - 1) / 2;
         b.className = 'card' + (RED(c) ? ' red' : '') + (L.length ? (L.includes(c) ? ' ok' : ' no') : '');
         b.innerHTML = cardHTML(c); b.setAttribute('aria-label', cardLabel(c));
         b.style.left = x0 + i * stepX + 'px'; b.style.transform = `rotate(${off * 1.3}deg) translateY(${off * off * .55}px)`; b.style.zIndex = i;
-        b.disabled = !L.includes(c);
-        b.onclick = () => { ac(); play(0, c); };
+        b.disabled = !L.includes(c); b.dataset.c = c; b.dataset.rest = b.style.transform;
         handEl.append(b);
       });
-      msg.textContent = s.phase === 'play' && s.turn === 0 ? (s.trick.length ? 'Your turn' : 'Your lead') : '';
+
     }
+
+    // ---------- your cards: tap, drag onto the table, or flick upward ----------
+    function playMine(c, b) { lastFrom = { c, rect: b.getBoundingClientRect() }; play(0, c); }
+    handEl.addEventListener('pointerdown', e => {
+      const b = e.target.closest('.card'); if (!b || b.disabled || drag) return;
+      ac(); b.setPointerCapture(e.pointerId);
+      drag = { b, c: +b.dataset.c, id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, vy: 0, ly: e.clientY, lt: performance.now() };
+    });
+    handEl.addEventListener('pointermove', e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0, now = performance.now();
+      drag.vy = (e.clientY - drag.ly) / Math.max(1, now - drag.lt); drag.ly = e.clientY; drag.lt = now;
+      if (!drag.moved && Math.hypot(dx, dy) > 8) { drag.moved = true; drag.b.classList.add('dragging'); buzz(4); }
+      if (drag.moved) drag.b.style.transform = `translate(${dx}px,${dy}px) rotate(${dx * .04}deg) scale(1.08)`;
+    });
+    const endDrag = e => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const d = drag; drag = null;
+      if (!d.moved) playMine(d.c, d.b); // a plain tap
+      else {
+        const r = d.b.getBoundingClientRect(), top = handEl.getBoundingClientRect().top;
+        const flicked = d.vy < -.6 && e.clientY < d.y0 - 30; // a quick upward swipe
+        if (r.top + r.height * .3 < top || flicked) playMine(d.c, d.b);
+        else { d.b.classList.remove('dragging'); d.b.style.transform = d.b.dataset.rest; click(400, .03, .08, 'sine'); } // not far enough: back into the hand
+      }
+      if (pendingHand) { pendingHand = false; render(); }
+    };
+    handEl.addEventListener('pointerup', endDrag); handEl.addEventListener('pointercancel', endDrag);
 
     // ---------- flow ----------
     function step() {
@@ -466,7 +513,7 @@ export default {
       ov.querySelector('.prev').onclick = () => { v = Math.max(0, v - 1); click(700 + v * 30, .02, .12, 'triangle'); buzz(4); show(); };
       ov.querySelector('.next').onclick = () => { v = Math.min(13, v + 1); click(700 + v * 30, .02, .12, 'triangle'); buzz(4); show(); };
       // Slide to pick: drag the number row like a wheel (left = higher). Tapping a side number picks it.
-      const stepEl = ov.querySelector('.sp-step'), curEl = ov.querySelector('.cur'), STEP = 26;
+      const stepEl = ov.querySelector('.sp-step'), curEl = ov.querySelector('.cur'), STEP = 58; // px of drag per number: wide enough to land on the one you want
       let sx = null, base = 0, moved = false, downOn = null;
       stepEl.addEventListener('pointerdown', e => {
         if (e.target.closest('.arrow')) return;
@@ -475,10 +522,11 @@ export default {
       stepEl.addEventListener('pointermove', e => {
         if (sx === null) return;
         const dx = e.clientX - sx; if (Math.abs(dx) > 6) moved = true;
-        const nv = Math.max(0, Math.min(13, base + Math.round(-dx / STEP)));
+        const steps = Math.trunc(-dx / STEP + Math.sign(-dx) * .2); // a step counts after ~80% of its width, so small wobbles don't change the bid
+        const nv = Math.max(0, Math.min(13, base + steps));
         if (nv !== v) { v = nv; click(700 + v * 30, .02, .12, 'triangle'); buzz(3); show(); }
         const rest = (-dx / STEP) - (v - base); // how far between numbers, for a little follow-the-finger
-        curEl.style.transform = `translateX(${Math.max(-1, Math.min(1, -rest)) * 10}px)`;
+        curEl.style.transform = `translateX(${Math.max(-1, Math.min(1, -rest)) * 14}px)`;
       });
       const release = () => {
         if (sx === null) return; sx = null; curEl.style.transition = ''; curEl.style.transform = '';
