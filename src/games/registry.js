@@ -5,6 +5,7 @@ export default [
   'farm-free',
   'hotel',
   'slide',
+  'pen',
   'spades',
   'words',
 ];

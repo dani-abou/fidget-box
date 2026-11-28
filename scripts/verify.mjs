@@ -83,7 +83,7 @@ try {
   // ---- 2. offline ----
   await ctx.setOffline(true);
   await page.reload();
-  ok(await page.waitForFunction(() => document.querySelectorAll('.tile').length === 6, null, { timeout: 5000 }).then(() => true, () => false), 'offline reload: home screen with 6 games');
+  ok(await page.waitForFunction(() => document.querySelectorAll('.tile').length === 7, null, { timeout: 5000 }).then(() => true, () => false), 'offline reload: home screen with 7 games');
   ok(await page.evaluate(() => document.getElementById('home').getBoundingClientRect().height > innerHeight * .8), 'home screen fills the height (hidden play area takes no space)');
   ok(await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('600 20px Fredoka'); }), 'offline reload: Fredoka font loaded from cache');
   const cold = watch(await ctx.newPage());
@@ -107,6 +107,19 @@ try {
   ok(await page.waitForSelector('.panel h2:has-text("Level 1 cleared")', { timeout: 3000 }).then(() => true, () => false) && (await page.locator('.panel .big span.on').count()) === 3, 'slide: solving in the minimum shows "Level 1 cleared" with 3 stars');
   await page.click('.panel .btn.primary'); // next level
   ok(/Lv\s*2(?!\d)/.test(await page.textContent('#stage .stat')), 'slide: next level loads, progress saved');
+  await page.click('#back');
+
+  // --- Goat Pen: tap fences into the par pen, pen it, three stars ---
+  await page.click('.tile[data-go="pen"]'); await page.waitForFunction(() => document.querySelector('.gp-tip')?.textContent);
+  const pen = JSON.parse(await readFile(join(work, 'src/data/pen-levels.json'), 'utf8'))[0];
+  ok(await page.isDisabled('.gp-done'), 'pen: "Pen it" is disabled while the goat can get out');
+  { const bx = await page.locator('.gp-board').boundingBox(), w = pen.rows[0].length, c = bx.width / w;
+    for (const f of pen.best) await page.mouse.click(bx.x + (f % w + .5) * c, bx.y + (Math.floor(f / w) + .5) * c); }
+  ok(!(await page.isDisabled('.gp-done')) && (await page.textContent('.gp-done')).includes(String(pen.par)), `pen: the par fences pen the goat for ${pen.par}`);
+  await page.click('.gp-done');
+  ok(await page.waitForSelector('.panel .big', { timeout: 3000 }).then(() => true, () => false) && (await page.locator('.panel .big span.on').count()) === 3, 'pen: matching par gives 3 stars');
+  await page.click('.panel .btn.primary');
+  ok(/Lv\s*2(?!\d)/.test(await page.textContent('#stage .stat')), 'pen: next level loads');
   await page.click('#back');
 
   // --- Letter Trail: spell a real word by dragging across the board ---

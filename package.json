@@ -4,7 +4,9 @@
   "private": true,
   "description": "Ad-free fidget toys as an offline-first PWA.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "node build.mjs",
     "start": "node server.mjs",
@@ -14,6 +16,7 @@
     "verify": "node build.mjs && node tests/sim.mjs && node scripts/verify.mjs",
     "levels": "node scripts/make-slide-levels.mjs",
     "words": "node scripts/make-words.mjs",
-    "farm:pace": "node scripts/farm-pace.mjs"
+    "farm:pace": "node scripts/farm-pace.mjs",
+    "pen:levels": "node scripts/make-pen-levels.mjs"
   }
 }

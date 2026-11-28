@@ -3,6 +3,7 @@
 //  - Letter Trail: boards generate quickly and every level's target is reachable.
 //  - Slide Free: every level is solvable in exactly its stated minimum.
 import { readFileSync } from 'node:fs';
+import { parse as penParse, reach as penReach, starsFor as penStars } from '../src/games/pen/logic.js';
 import assert from 'node:assert/strict';
 import { legal, trickWinner, scoreHand, aiBid, aiPlay, estimate } from '../src/games/spades.js';
 import { parseDict, makeBoard, levelRules as wordRules } from '../src/games/words.js';
@@ -144,6 +145,34 @@ check('free farm offline earnings: zero until a chain is automated, then positiv
 check('farm stars: more time left, more stars', () => {
   assert.equal(starsFor(100, 100), 3); assert.equal(starsFor(STAR_TIME_LEFT[0] * 100, 100), 3);
   assert.equal(starsFor(20, 100), 2); assert.equal(starsFor(1, 100), 1);
+});
+
+check('goat pen: edge escape, no diagonal moves, water, bonuses, burrows', () => {
+  const L = penParse(['.....', '.~~~.', '.~G..', '.~~~.', '.....']);
+  assert.ok(penReach(L, []).escaped, 'an open gap lets it out');
+  const i = (r, c) => r * 5 + c;
+  assert.equal(penReach(L, [i(2, 3)]).score, 1, 'one fence in the gap pens it on its own tile');
+  // fences only touching at a corner still hold: the goat can't step diagonally
+  const D = penParse(['.....', '..~..', '.~G~.', '.....', '.....']);
+  assert.ok(!penReach(D, [i(3, 2)]).escaped && penReach(D, [i(3, 2)]).score === 1, 'corner gaps are closed');
+  const B = penParse(['~~~~~', '~GcT~', '~~~~~', '~.T..', '~~~~~']);
+  assert.ok(penReach(B, []).escaped, 'a burrow leads to the other one, and out');
+  assert.equal(penReach(B, [i(3, 3)]).score, 1 + 4 + 1 + 1 + 1, 'carrot +3 and both burrow tiles count');
+  const Wn = penParse(['~~~~', '~Gw~', '~~~~']);
+  assert.equal(penReach(Wn, []).score, 1 + 1 - 5, 'a wasp nest costs 5');
+  assert.equal(penStars(30, 30), 3); assert.equal(penStars(24, 30), 2); assert.equal(penStars(5, 30), 1);
+});
+
+check('goat pen levels: 40, each par pen fits the budget and scores par', () => {
+  const lv = JSON.parse(readFileSync(new URL('../src/data/pen-levels.json', import.meta.url)));
+  assert.equal(lv.length, 40);
+  lv.forEach((l, k) => {
+    const L = penParse(l.rows);
+    assert.ok(l.rows.every(r => r.length === l.rows[0].length), `level ${k + 1}: ragged rows`);
+    assert.ok(penReach(L, []).escaped, `level ${k + 1}: the goat starts free`);
+    assert.ok(l.best.length <= l.fences && l.best.every(f => L.cells[f] === '.'), `level ${k + 1}: par pen is legal`);
+    assert.equal(penReach(L, l.best).score, l.par, `level ${k + 1}: par pen scores par`);
+  });
 });
 
 console.log(fails ? `\n${fails} failed` : '\nall logic checks passed');
