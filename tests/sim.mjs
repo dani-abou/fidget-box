@@ -234,5 +234,19 @@ check('jelly gates levels: 60, every one solvable with the game rules', () => {
   }
 });
 
+const HT = await import('../src/games/hotel.js');
+check('tiny inn: reputation, room tiers, guests, the inn chain', () => {
+  let r = 2.5; for (let i = 0; i < 60; i++) r = HT.nudge(r, true, .05);
+  assert.ok(r > 4.7 && r <= 5, `happy guests raise stars toward 5 (${r.toFixed(2)})`);
+  for (let i = 0; i < 10; i++) r = HT.nudge(r, false, .12);
+  assert.ok(r < 3, 'walkouts sink them');
+  assert.ok(HT.TIERS[2].price > HT.TIERS[1].price && HT.TIERS[1].price > HT.TIERS[0].price, 'better rooms pay more');
+  assert.ok(HT.tierCost(23, 2) > HT.tierCost(0, 2) && HT.tierCost(5, 2) > HT.tierCost(5, 1), 'upgrades cost more up the hall and for suites');
+  assert.ok(HT.GUESTS.celebrity.min === 2 && HT.GUESTS.business.min === 1 && HT.GUESTS.backpacker.min === 0);
+  const all = new Set(['room1', 'luxury', 'spa', 'pool', 'arms', 'arms2', 'shoes', 'skates']);
+  assert.equal(HT.hotelRules(all).cap, 12); assert.equal(HT.hotelRules(all).speed, 6.6);
+  assert.ok(Math.abs(HT.hotelRules(all, 2).mult - HT.hotelRules(all, 0).mult * 1.5) < 1e-9, 'each inn in the chain adds 25%');
+});
+
 console.log(fails ? `\n${fails} failed` : '\nall logic checks passed');
 process.exit(fails ? 1 : 0);

@@ -193,7 +193,7 @@ try {
   const hx = await page.evaluate(() => document.querySelector('.ht')._dbg.P.x);
   await page.keyboard.down('ArrowRight'); await page.waitForTimeout(600); await page.keyboard.up('ArrowRight');
   ok(await page.evaluate(x => document.querySelector('.ht')._dbg.P.x > x + .8, hx), 'hotel: player walks');
-  await page.evaluate(() => { const d = document.querySelector('.ht')._dbg; d.P.x = 3.5; d.P.y = 18.4; });
+  await page.evaluate(() => { const d = document.querySelector('.ht')._dbg; d.P.x = 3.5; d.P.y = 50.4; });
   ok(await page.waitForFunction(() => document.querySelector('.ht')._dbg.piles.desk > 0, null, { timeout: 15000 }).then(() => true, () => false), 'hotel: standing at the desk checks a guest in (cash on the desk)');
   await page.click('#back');
 
