@@ -175,5 +175,29 @@ check('goat pen levels: 40, each par pen fits the budget and scores par', () => 
   });
 });
 
+const FX = await import('../src/games/farm/config.js');
+check('free farm keeps growing: endless upgrades, ribbons, Orchard and Bee Garden', () => {
+  for (const k of Object.keys(FX.CONFIG.upgrades)) {
+    let prevV = FX.upgradeValue(k, 0), prevC = 0, n = 0;
+    for (let l = 0; l < 40 && !FX.upgradeMaxed(k, l, true); l++, n++) {
+      const c = FX.upgradeCost(k, l), v = FX.upgradeValue(k, l + 1);
+      assert.ok(c > prevC, `${k}: cost rises (${prevC} -> ${c} at ${l})`); prevC = c;
+      assert.ok(k === 'harvest' ? v <= prevV : v >= prevV, `${k}: value improves`); prevV = v;
+    }
+    if (!FX.CONFIG.more[k].cap) assert.equal(n, 40, `${k}: never maxes out in Free Farm`);
+    if (!FX.CONFIG.upgrades[k].free) assert.ok(FX.upgradeMaxed(k, FX.CONFIG.upgrades[k].cost.length, false), `${k}: levels still stop at the table`);
+  }
+  assert.equal(FX.upgradeValue('speed', 99), 8.4, 'run speed has a cap');
+  assert.equal(FX.ribbonsFor(1999), 0); assert.equal(FX.ribbonsFor(2000), 1); assert.equal(FX.ribbonsFor(8000), 2);
+  const free = FX.layoutFor(FX.FREE), lvl = FX.layoutFor(FX.LEVELS[0]);
+  assert.deepEqual(free.C.zones.map(z => z.id).filter(id => ['orchard', 'bees'].includes(id)), ['orchard', 'bees']);
+  assert.equal(free.C.world.blocked.length, 0, 'Free Farm clears the woods');
+  assert.ok(!lvl.C.zones.some(z => z.free) && lvl.C.world.blocked.length === 2, 'levels keep the woods');
+  const all = new Set(FX.UNLOCKS.map(u => u.id));
+  const before = automatedRate(new Set([...all].filter(id => !['orchard', 'bees'].includes(id) && !FX.UNLOCKS.find(u => u.id === id && FX.UNLOCKS.indexOf(u) >= FX.UNLOCKS.findIndex(x => x.id === 'orchard')))));
+  assert.ok(automatedRate(all) > before, 'the new areas earn more on their own');
+  assert.ok(automatedRate(all, { prices: 5 }) > automatedRate(all) * 1.4, 'price upgrades raise offline earnings');
+});
+
 console.log(fails ? `\n${fails} failed` : '\nall logic checks passed');
 process.exit(fails ? 1 : 0);

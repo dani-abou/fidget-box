@@ -8,7 +8,7 @@ import { ac, buzz, click, tone } from '../lib/sound.js';
 import { progress, loadSave, writeSave } from '../lib/progress.js';
 import { panel, levelPicker, starsHTML, pills } from '../lib/ui.js';
 import { confetti } from '../lib/fx.js';
-import { CONFIG as C, UNLOCKS, layoutFor, SHOWN_UNLOCKS, LOOKAHEAD, UNLOCK_SECONDS, UNLOCK_DWELL, TUTORIAL, LEVELS, STAR_TIME_LEFT, FREE, META } from './farm/config.js';
+import { CONFIG as C, UNLOCKS, layoutFor, SHOWN_UNLOCKS, LOOKAHEAD, UNLOCK_SECONDS, UNLOCK_DWELL, TUTORIAL, LEVELS, STAR_TIME_LEFT, FREE, META, FAIR, ribbonsFor, upgradeValue, upgradeCost, upgradeMaxed } from './farm/config.js';
 import { createArt, rr, INK } from './farm/art.js';
 
 const START_IDS = new Set([...C.fields, ...C.stands, ...C.zones].filter(e => e.start).map(e => e.id));
@@ -17,11 +17,11 @@ const inRect = (p, r, pad = 0) => p.x > r.x - pad && p.x < r.x + r.w + pad && p.
 const zoneAt = (zones, p) => zones.find(z => inRect(p, z)) || zones.find(z => z.start);
 const d2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const easeBack = t => { t = Math.min(1, t); const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
-const up = (state, key) => C.upgrades[key].levels[state.up[key] || 0];
+const up = (state, key) => upgradeValue(key, state.up[key] || 0);
 const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e4 ? (n / 1e3).toFixed(1) + 'k' : String(Math.floor(n));
 
 export const COIN = '<svg class="coin" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.6" fill="#FFC93C" stroke="#2B1D3A" stroke-width="2"/><circle cx="10" cy="10" r="5" fill="none" stroke="#E09A10" stroke-width="1.6"/><ellipse cx="7.6" cy="6.8" rx="1.4" ry="2.2" fill="#fff" opacity=".7" transform="rotate(-35 7.6 6.8)"/></svg>';
-const ICON = { carrot: '🥕', corn: '🌽', egg: '🥚', bread: '🍞', pumpkin: '🎃', cheese: '🧀', wool: '🧶' };
+const ICON = { carrot: '🥕', corn: '🌽', egg: '🥚', bread: '🍞', pumpkin: '🎃', cheese: '🧀', wool: '🧶', apple: '🍎', juice: '🧃', honey: '🍯', cake: '🍰' };
 const mmss = t => { t = Math.max(0, Math.ceil(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
 /** Text for a level goal, e.g. "Sell 5 🍞". Exported for tests. */
 export const goalText = gl =>
@@ -38,15 +38,15 @@ export const starsFor = (left, total) => left / total >= STAR_TIME_LEFT[0] ? 3 :
 
 const START_ON = id => START_IDS.has(id);
 /** Coins per second the farm makes on its own (Free Farm offline earnings). Exported for tests. */
-export function automatedRate(unlocked, upLevels = {}) {
+export function automatedRate(unlocked, upLevels = {}, priceMult = 1) {
   const on = id => START_ON(id) || unlocked.has(id);
   const has = kind => C.helpers.some(h => h.kind === kind && on(h.id));
   if (!has('cashier') || !has('carrier')) return 0;
-  const mSpeed = C.upgrades.machineSpeed.levels[upLevels.machineSpeed || 0];
+  const lv = k => upgradeValue(k, upLevels[k] || 0), mSpeed = lv('machineSpeed');
   const prod = p => {
     let u = 0;
-    for (const f of C.fields) if (f.crop === p && on(f.id) && C.helpers.some(h => h.kind === 'farmhand' && on(h.id) && h.fields.includes(f.id))) u += f.w * f.h / f.grow;
-    for (const pen of C.pens) if (pen.product === p && on(pen.id)) u += pen.animals / pen.interval;
+    for (const f of C.fields) if (f.crop === p && on(f.id) && C.helpers.some(h => h.kind === 'farmhand' && on(h.id) && h.fields.includes(f.id))) u += f.w * f.h / f.grow * lv('growth');
+    for (const pen of C.pens) if (pen.product === p && on(pen.id)) u += pen.animals / pen.interval * lv('animals');
     for (const m of C.machines) if (m.out === p && on(m.id)) u += Math.min(prod(m.in), mSpeed / m.time);
     return u;
   };
@@ -55,7 +55,7 @@ export function automatedRate(unlocked, upLevels = {}) {
   const demand = (C.customers.buyMin + C.customers.buyMax) / 2 / every;
   let units = 0, value = 0;
   for (const s of stands) { const u = prod(s.product); units += u; value += u * C.products[s.product].price; }
-  return units > 0 ? value * Math.min(1, demand / units) : 0;
+  return units > 0 ? value * Math.min(1, demand / units) * lv('prices') * priceMult : 0;
 }
 
 // ---- seeds: the level mode's permanent currency ----
@@ -146,7 +146,8 @@ export default {
 .fm-goal .bar i{display:block;height:100%;background:var(--butter)}
 .fm-goal small{color:var(--muted);font-size:13px;line-height:1.3;display:block}
 .fm-lv{display:inline-flex;gap:3px;margin-left:4px;vertical-align:middle}
-.fm-lv i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2)} .fm-lv i.on{background:#FFD23F}`,
+.fm-lv i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.2)} .fm-lv i.on{background:#FFD23F}
+.fm-lvn{font-size:11px;color:#FFD23F;font-weight:600}`,
 
   init(el) {
     const prog = progress('farm');
@@ -190,6 +191,8 @@ export function runLevel(el, n, api, mode = 'levels') {
     timeLeft: L.time ?? Infinity, phase: free ? 'play' : 'intro', paused: false,
   };
   const bonus = { prices: 1, patience: 0, scare: 0 }; // from seed-shop upgrades, applied when a level starts
+  const fair = loadSave('farm-fair') || { ribbons: 0, fairs: 0 }; // Free Farm's County Fair
+  if (free) { bonus.prices = 1 + fair.ribbons * FAIR.bonus; if (!sv.savedAt && fair.ribbons) S.coins += fair.ribbons * FAIR.startCoins; }
   function applyMeta() {
     const m = loadMeta(), v = k => metaValue(m, k);
     S.coins += v('headStart'); coinShown = S.coins; S.timeLeft = L.time + v('time');
@@ -221,7 +224,7 @@ export function runLevel(el, n, api, mode = 'levels') {
     animals: Array.from({ length: p.animals }, (_, i) => ({ x: p.x + .6 + Math.random() * (p.w - 1.2), y: p.y + .8 + Math.random() * (p.h - 1), tx: 0, ty: 0, look: 1, t: i })) }));
   const machines = C.machines.map(m => ({ ...m, inN: sv.machines?.[m.id]?.in ?? 0, outN: sv.machines?.[m.id]?.out ?? 0, prog: 0,
     inAt: { x: m.x - 1.3 * m.dir, y: m.y + .75 }, outAt: { x: m.x + 1.3 * m.dir, y: m.y + .75 } }));
-  const stands = C.stands.map(s => ({ ...s, stock: sv.stands?.[s.product] ?? 0, at: { x: s.x, y: C.standY + .75 }, spot: { x: s.x, y: C.standY + 1.55 } }));
+  const stands = C.stands.map(s => { const sy = s.y ?? C.standY; return { ...s, sy, direct: s.y !== undefined, stock: sv.stands?.[s.product] ?? 0, at: { x: s.x, y: sy + .75 }, spot: { x: s.x, y: sy + 1.55 } }; });
   const crates = C.helpers.filter(h => h.kind === 'farmhand').map(h => ({ id: h.id, at: h.crate, n: sv.crates?.[h.id] ?? 0,
     crop: C.fields.find(f => f.id === h.fields[0]).crop }));
   const helpers = [];
@@ -250,7 +253,8 @@ export function runLevel(el, n, api, mode = 'levels') {
 
   // ================= saving =================
   // Free Farm saves everything; a level is a short round (only levels, stars and seeds are kept)
-  const save = () => { if (free) writeSave('farm-free', {
+  let wiped = false; // set when the farm is wiped, so the shutdown save can't write it back
+  const save = () => { if (free && !wiped) writeSave('farm-free', {
     map: 2, coins: S.coins, unlocked: [...S.unlocked], partial: S.partial, up: S.up, tut: S.tut, earned: S.earned,
     player: { x: +P.x.toFixed(2), y: +P.y.toFixed(2), stack: P.stack.map(x => x.t) },
     piles: Object.fromEntries(pens.map(q => [q.id, q.n])), crates: Object.fromEntries(crates.map(c => [c.id, c.n])),
@@ -378,8 +382,9 @@ export function runLevel(el, n, api, mode = 'levels') {
     for (const s of P.stack) s.pop = Math.min(1, s.pop + dt * 4);
 
     // --- crops grow ---
+    const growK = up(S, 'growth');
     for (const f of fields) if (on(f.id)) for (const pl of f.plots) {
-      if (pl.g < f.grow) { pl.g += dt; if (pl.g >= f.grow) pl.ripeT = 0; }
+      if (pl.g < f.grow) { pl.g += dt * growK; if (pl.g >= f.grow) pl.ripeT = 0; }
       pl.ripeT = Math.min(1, pl.ripeT + dt * 3);
     }
     // --- player harvests by walking over ripe plots ---
@@ -414,7 +419,7 @@ export function runLevel(el, n, api, mode = 'levels') {
       }
       // the shipping bin takes anything, one item at a time, for a cut of the price
       if (!acted && P.stack.length && binDwell >= UNLOCK_DWELL) { // after a moment's stand, so walking across sells nothing
-        const it = P.stack.pop(), pay = Math.max(C.shipBin.min, Math.floor(C.products[it.t].price * C.shipBin.rate * bonus.prices));
+        const it = P.stack.pop(), pay = Math.max(C.shipBin.min, Math.floor(C.products[it.t].price * C.shipBin.rate * bonus.prices * up(S, 'prices')));
         S.coins += pay; S.earned += pay; shipped += pay; shipT = .8;
         fly(it.t, { x: P.x, y: P.y - 1.2 }, C.shipBin, .22); sClink(); P.actT = C.player.dropInterval;
       }
@@ -427,7 +432,7 @@ export function runLevel(el, n, api, mode = 'levels') {
         walkTo(a, { x: a.tx, y: a.ty }, .5, dt);
       }
       pn.timer += dt;
-      const every = pn.interval / pn.animals.length; // pn.animals is the array of animals here
+      const every = pn.interval / pn.animals.length / up(S, 'animals'); // pn.animals is the array of animals here
       if (pn.timer >= every) { pn.timer -= every; if (pn.n < C.pileCap) { const a = pn.animals[Math.floor(Math.random() * pn.animals.length)]; fly(pn.product, { x: a.x, y: a.y - .4 }, pn.pile, .4, () => { pn.n = Math.min(C.pileCap, pn.n + 1); }); } }
     }
     // --- machines ---
@@ -530,13 +535,24 @@ export function runLevel(el, n, api, mode = 'levels') {
     if (S.phase !== 'play') return;
     S.paused = true;
     if (free) {
-      const built = UNLOCKS.filter(u => S.unlocked.has(u.id)).length;
+      const built = UNLOCKS.filter(u => S.unlocked.has(u.id)).length, win = ribbonsFor(S.earned), resume = () => { S.paused = false; last = performance.now(); };
+      const nextAt = (win + 1) ** 2 * FAIR.per;
+      const fairPanel = () => panel(el, { title: '🎀 County Fair', html: `<p style="text-align:center">Enter your farm in the County Fair. It's judged on everything it has earned (${COIN} ${fmt(S.earned)}).</p>` +
+        `<p style="text-align:center;font-size:22px;margin:8px 0"><b>${win ? `🎀 × ${win}` : 'No ribbon yet'}</b></p>` +
+        `<p style="text-align:center">Each ribbon adds <b>+${FAIR.bonus * 100}%</b> to every sale, for good, and ${COIN} ${FAIR.startCoins} to start with. You start over with a fresh farm; ribbons stay.${win ? '' : `<br>First ribbon at ${COIN} ${fmt(FAIR.per)} earned.`}</p>`,
+        buttons: [{ label: 'Not yet', onClick: resume }, ...(win ? [{ label: `Enter for 🎀 ${win}`, primary: true, onClick: () => {
+          wiped = true; writeSave('farm-fair', { ribbons: fair.ribbons + win, fairs: fair.fairs + 1 }); writeSave('farm-free', null);
+          confetti(root, 160); api.start(0);
+        } }] : [])] });
       panel(el, {
-        title: 'Free Farm', html: `<p style="text-align:center">Built <b>${built}/${UNLOCKS.length}</b> · earned <b>${COIN} ${fmt(S.earned)}</b><br>Saved as you play. Helpers keep earning while you're away.</p>`,
-        buttons: [{ label: 'Start over', onClick: () => panel(el, { title: 'Start over?', html: '<p style="text-align:center">This wipes your Free Farm.</p>', buttons: [
-            { label: 'Keep it', primary: true, onClick: () => { S.paused = false; last = performance.now(); } },
-            { label: 'Wipe it', onClick: () => { writeSave('farm-free', null); api.start(0); } }] }) },
-          { label: 'Back to farming', primary: true, onClick: () => { S.paused = false; last = performance.now(); } }],
+        title: 'Free Farm', html: `<p style="text-align:center">Built <b>${built}/${UNLOCKS.length}</b> · earned <b>${COIN} ${fmt(S.earned)}</b><br>` +
+          `${fair.ribbons ? `🎀 <b>${fair.ribbons}</b> ribbons: <b>+${Math.round(fair.ribbons * FAIR.bonus * 100)}%</b> on every sale<br>` : ''}` +
+          `County Fair: ${win ? `ready to win 🎀 <b>${win}</b> (${fmt(nextAt - S.earned)} more for ${win + 1})` : `first ribbon at ${COIN} ${fmt(FAIR.per)} earned`}<br><small>Saved as you play. Helpers keep earning while you're away.</small></p>`,
+        buttons: [{ label: '🎀 County Fair', onClick: fairPanel },
+          { label: 'Start over', onClick: () => panel(el, { title: 'Start over?', html: '<p style="text-align:center">This wipes your Free Farm (ribbons stay).</p>', buttons: [
+            { label: 'Keep it', primary: true, onClick: resume },
+            { label: 'Wipe it', onClick: () => { wiped = true; writeSave('farm-free', null); api.start(0); } }] }) },
+          { label: 'Back to farming', primary: true, onClick: resume }],
       });
       return;
     }
@@ -731,7 +747,7 @@ export function runLevel(el, n, api, mode = 'levels') {
     const cashier = helpers.some(h => h.kind === 'cashier');
     for (const c of [...customers]) {
       c.t -= dt;
-      if (c.state === 'in') { if (walkTo(c, cc.gate, cc.speed, dt)) c.state = 'shop'; }
+      if (c.state === 'in') { if (c.stand.direct || walkTo(c, cc.gate, cc.speed, dt)) c.state = 'shop'; }
       else if (c.state === 'shop') {
         if (walkTo(c, c.stand.spot, cc.speed, dt)) {
           if (c.got.length < c.want && c.stand.stock > 0 && !(insp.warning && insp.stall === c.stand)) { /* the inspected stall is closed during the warning */ if (c.t <= 0) { c.stand.stock--; c.got.push(c.stand.product); fly(c.stand.product, c.stand.at, { x: c.x, y: c.y - .9 }, .2); c.t = cc.takeInterval; c.wait = 0; } }
@@ -752,7 +768,7 @@ export function runLevel(el, n, api, mode = 'levels') {
       checkoutT += dt / time;
       if (checkoutT >= 1) {
         checkoutT = 0;
-        const pay = Math.round(front.got.reduce((a, p) => a + C.products[p].price, 0) * bonus.prices);
+        const pay = Math.round(front.got.reduce((a, p) => a + C.products[p].price, 0) * bonus.prices * up(S, 'prices'));
           S.coins += pay; S.earned += pay; S.served++; for (const p of front.got) S.sold[p] = (S.sold[p] || 0) + 1;
           S.streak++; S.bestStreak = Math.max(S.bestStreak, S.streak);
           if (gStreak && S.streak > 1) float(front.x, front.y - 2.1, `${S.streak} in a row!`, '#4FE378');
@@ -772,18 +788,21 @@ export function runLevel(el, n, api, mode = 'levels') {
   function closeSheet() { sheetFor = null; sheet.hidden = true; }
   function renderSheet() {
     let h = '<h3>⬆️ Upgrades</h3>';
+    const show = (k, v) => { const u = C.upgrades[k]; return u.pct ? `${Math.round((v - 1) * 100)}%` : `${+v.toFixed(3)}${u.unit ? ' ' + u.unit : ''}`; };
     for (const [k, u] of Object.entries(C.upgrades)) {
-      const lvl = S.up[k] || 0, max = lvl >= u.cost.length, price = u.cost[lvl], locked = u.needs && !on(u.needs);
-      const val = u.levels[lvl], next = u.levels[lvl + 1];
-      const dots = u.levels.map((_, i) => `<i class="${i <= lvl ? 'on' : ''}"></i>`).join('');
-      const detail = locked ? `Needs ${TILES.find(x => x.id === u.needs)?.label || u.needs}` : max ? 'Maxed out' : `${val}${u.unit ? ' ' + u.unit : ''} → ${next}`;
+      if (u.free && !free) continue;
+      const lvl = S.up[k] || 0, max = upgradeMaxed(k, lvl, free), price = upgradeCost(k, lvl), locked = u.needs && !on(u.needs);
+      const val = upgradeValue(k, lvl), next = upgradeValue(k, lvl + 1);
+      // the dots for the table's levels; past it (Free Farm), just the level number
+      const dots = lvl < u.levels.length && !u.free ? u.levels.map((_, i) => `<i class="${i <= lvl ? 'on' : ''}"></i>`).join('') : `<b class="fm-lvn">Lv ${lvl + 1}</b>`;
+      const detail = locked ? `Needs ${TILES.find(x => x.id === u.needs)?.label || u.needs}` : max ? 'Maxed out' : `${show(k, val)} → ${show(k, next)}`;
       h += `<div class="fm-up"><span class="ic">${u.icon}</span><span class="nm">${u.label}<span class="fm-lv">${dots}</span><small>${detail}</small></span>` +
         `<button class="btn ${!locked && !max && S.coins >= price ? 'go' : ''}" data-k="${k}" ${locked || max || S.coins < price ? 'disabled' : ''}>${max ? 'MAX' : COIN + ' ' + fmt(price)}</button></div>`;
     }
     sheet.innerHTML = h;
     sheet.querySelectorAll('.btn[data-k]').forEach(b => b.onclick = () => {
-      const k = b.dataset.k, lvl = S.up[k] || 0, price = C.upgrades[k].cost[lvl];
-      if (S.coins < price) return;
+      const k = b.dataset.k, lvl = S.up[k] || 0, price = upgradeCost(k, lvl);
+      if (S.coins < price || upgradeMaxed(k, lvl, free)) return;
       S.coins -= price; coinShown = Math.min(coinShown, S.coins); S.up[k] = lvl + 1; sChime(false); buzz(20); burst(P.x, P.y - 1, '#FFD23F', 10); float(P.x, P.y - 1.6, C.upgrades[k].label + ' up!', '#FFD23F');
       save(); renderSheet();
     });
@@ -907,11 +926,11 @@ export function runLevel(el, n, api, mode = 'levels') {
     }
     // stands with their stock
     for (const s of stands) if (on(s.id)) {
-      art.stand(g, X(s.x), Y(C.standY), s.product);
+      art.stand(g, X(s.x), Y(s.sy), s.product);
       const n = Math.min(s.stock, 10);
-      for (let i = 0; i < n; i++) drawItem(s.product, X(s.x) + ((i % 5) - 2) * T * .27, Y(C.standY) - T * .05 - Math.floor(i / 5) * T * .2, .7);
-      if (s.stock > 10) { g.font = `600 ${T * .22}px Fredoka`; g.fillStyle = INK; g.textAlign = 'center'; g.fillText(s.stock, X(s.x), Y(C.standY) + T * .45); }
-      drawItem(s.product, X(s.x), Y(C.standY) - T * 1.62, .7);
+      for (let i = 0; i < n; i++) drawItem(s.product, X(s.x) + ((i % 5) - 2) * T * .27, Y(s.sy) - T * .05 - Math.floor(i / 5) * T * .2, .7);
+      if (s.stock > 10) { g.font = `600 ${T * .22}px Fredoka`; g.fillStyle = INK; g.textAlign = 'center'; g.fillText(s.stock, X(s.x), Y(s.sy) + T * .45); }
+      drawItem(s.product, X(s.x), Y(s.sy) - T * 1.62, .7);
     }
     art.register(g, X(C.register.counter.x), Y(C.register.counter.y));
     // festival cart: bunting, wheels and a card of what it still needs
@@ -1033,7 +1052,7 @@ export function runLevel(el, n, api, mode = 'levels') {
     else if (insp.warning) html = `<span>📋 Inspector checks the ${ICON[insp.stall.product]} stall in <b>${Math.ceil(insp.warning)}s</b>: ${insp.stall.stock}/${gInspect.inspect.min}</span>`;
     else if (free) {
       const gl = ob.goal; const have = gl ? Math.min(gl.price, S.coins + (S.partial[gl.id] || 0)) : 0;
-      html = gl ? `<span>🎯 ${gl.icon} ${gl.label} <b>${COIN}${fmt(have)}/${fmt(gl.price)}</b></span><span class="bar"><i style="width:${100 * have / gl.price}%"></i></span>` : '<span>🏆 Everything built! Enjoy your farm.</span>';
+      html = gl ? `<span>🎯 ${gl.icon} ${gl.label} <b>${COIN}${fmt(have)}/${fmt(gl.price)}</b></span><span class="bar"><i style="width:${100 * have / gl.price}%"></i></span>` : (free ? `<span>🏆 All built! Keep upgrading, or ☰ → 🎀 County Fair${ribbonsFor(S.earned) ? ` for ${ribbonsFor(S.earned)} ribbons` : ''}</span>` : '<span>🏆 Everything built! Enjoy your farm.</span>');
     }
     else {
       const gs = goals(), cur = gs.find(gl => !gl.done) || gs[gs.length - 1], frac = gs.reduce((a, gl) => a + gl.have / gl.need, 0) / gs.length;
@@ -1076,7 +1095,7 @@ export function runLevel(el, n, api, mode = 'levels') {
   function offlineEarnings(seconds) {
     if (!free || seconds < C.offline.minSeconds) return;
     const secs = Math.min(seconds, C.offline.maxHours * 3600);
-    const amt = Math.floor(automatedRate(S.unlocked, S.up) * secs * C.offline.efficiency);
+    const amt = Math.floor(automatedRate(S.unlocked, S.up, bonus.prices) * secs * C.offline.efficiency);
     for (const f of fields) for (const pl of f.plots) pl.g = f.grow; // crops kept growing
     if (amt <= 0) return;
     const hrs = Math.floor(secs / 3600), mins = Math.round(secs % 3600 / 60);

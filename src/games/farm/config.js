@@ -25,6 +25,23 @@ export const CONFIG = {
     helperSpeed: { label: 'Helper speed', icon: '🏃', levels: [3.0, 3.5, 4.0, 4.6], cost: [150, 450, 1200], needs: 'hand_carrot' },
     helperCarry: { label: 'Helper basket', icon: '🧺', levels: [6, 8, 11, 14],     cost: [180, 520, 1400], needs: 'hand_carrot' },
     machineSpeed: { label: 'Machine speed', icon: '⚙️', levels: [1, 1.4, 1.9, 2.5], cost: [300, 900, 2200], needs: 'mill' },
+    // Free Farm only: these and every upgrade above keep going past their table (see `more`)
+    prices:  { label: 'Market prices', icon: '🏷️', levels: [1], cost: [600], free: true, pct: true },
+    growth:  { label: 'Crop growth',   icon: '🌱', levels: [1], cost: [800], free: true, pct: true },
+    animals: { label: 'Happy animals', icon: '🐾', levels: [1], cost: [900], free: true, pct: true, needs: 'coop' },
+  },
+  // Free Farm: past the last level, each upgrade adds `step` (or multiplies by `mult`) up to `cap`,
+  // and costs `costMult` times the one before. So there's always another level to buy.
+  more: {
+    speed:   { step: .3, cap: 8.4, costMult: 2.2 },
+    carry:   { step: 5, costMult: 2.1 },
+    harvest: { mult: .8, cap: .008, costMult: 2.3 },
+    helperSpeed: { step: .3, cap: 7, costMult: 2.2 },
+    helperCarry: { step: 3, costMult: 2.1 },
+    machineSpeed: { step: .5, costMult: 2.2 },
+    prices:  { step: .1, costMult: 1.9 },
+    growth:  { step: .1, costMult: 1.9 },
+    animals: { step: .1, costMult: 1.9 },
   },
 
   // ---- products: sale price per item (0 = never sold, only processed) ----
@@ -39,6 +56,10 @@ export const CONFIG = {
     milk:    { name: 'Milk',     price: 0 },
     cheese:  { name: 'Cheese',   price: 30 },
     wool:    { name: 'Wool',     price: 26 },
+    apple:   { name: 'Apples',   price: 9 },
+    juice:   { name: 'Juice',    price: 45 },
+    honey:   { name: 'Honey',    price: 20 },
+    cake:    { name: 'Honey cake', price: 70 },
   },
 
   // ---- crop fields: 1-tile plots; crate is where a farmhand piles the harvest ----
@@ -49,6 +70,8 @@ export const CONFIG = {
     { id: 'cornB',   crop: 'corn',    x: 22, y: 4,  w: 3, h: 2, grow: 6 },
     { id: 'wheat',   crop: 'wheat',   x: 1,  y: 5,  w: 3, h: 3, grow: 5 },
     { id: 'pumpkin', crop: 'pumpkin', x: 13, y: 27, w: 3, h: 3, grow: 9 },
+    { id: 'orchardA', crop: 'apple',  x: 1,  y: 27, w: 3, h: 3, grow: 7 },   // Free Farm: the Orchard
+    { id: 'orchardB', crop: 'apple',  x: 1,  y: 31, w: 3, h: 3, grow: 7 },
   ],
 
   // ---- animal pens: each animal lays/produces one item every `interval` into the pile ----
@@ -56,6 +79,8 @@ export const CONFIG = {
     { id: 'coop',  animal: 'chicken', product: 'egg',  x: 7,  y: 5,  w: 3, h: 3, animals: 3, interval: 4.5, pile: { x: 10.7, y: 7.6 } },
     { id: 'barn',  animal: 'cow',     product: 'milk', x: 31, y: 5,  w: 3, h: 3, animals: 2, interval: 6,   pile: { x: 30.3, y: 7.6 } },
     { id: 'sheep', animal: 'sheep',   product: 'wool', x: 22, y: 27, w: 3, h: 3, animals: 3, interval: 8,   pile: { x: 21.3, y: 29.6 } },
+    { id: 'hives',  animal: 'bee',    product: 'honey', x: 33, y: 27, w: 3, h: 3, animals: 4, interval: 5, pile: { x: 32.3, y: 29.6 } }, // Free Farm: the Bee Garden
+    { id: 'hivesB', animal: 'bee',    product: 'honey', x: 33, y: 31, w: 3, h: 3, animals: 4, interval: 5, pile: { x: 32.3, y: 33.6 } },
   ],
   pileCap: 16,
 
@@ -64,6 +89,8 @@ export const CONFIG = {
     { id: 'mill',   name: 'Mill',         in: 'wheat', out: 'flour',  x: 4,    y: 11.5, time: 1.6 },
     { id: 'bakery', name: 'Bakery',       in: 'flour', out: 'bread',  x: 8.5,  y: 11.5, time: 2.2 },
     { id: 'press',  name: 'Cheese press', in: 'milk',  out: 'cheese', x: 29.5, y: 11.5, time: 2.5, dir: -1 }, // dir -1: input on the right
+    { id: 'cider',   name: 'Cider press', in: 'apple', out: 'juice', x: 8,    y: 31.5, time: 2.4 },
+    { id: 'kitchen', name: 'Kitchen',     in: 'honey', out: 'cake',  x: 29.5, y: 32,   time: 3, dir: -1 },
   ],
   machineCap: 20, // input and output each
 
@@ -76,6 +103,11 @@ export const CONFIG = {
     { id: 'stand_pumpkin', product: 'pumpkin', x: 20.92 },
     { id: 'stand_cheese',  product: 'cheese',  x: 22.85 },
     { id: 'stand_wool',    product: 'wool',    x: 24.78 },
+    // Free Farm: farm shops in the new areas, just below the road (customers walk straight there)
+    { id: 'stand_apple',   product: 'apple',   x: 6.6,  y: 25.4 },
+    { id: 'stand_juice',   product: 'juice',   x: 9.4,  y: 25.4 },
+    { id: 'stand_honey',   product: 'honey',   x: 28.6, y: 25.4 },
+    { id: 'stand_cake',    product: 'cake',    x: 31.4, y: 25.4 },
   ],
   standY: 12.6, standCap: 24,
 
@@ -111,6 +143,8 @@ export const CONFIG = {
     { id: 'meadow',   name: 'Meadow',     x: 0,  y: 0,  w: 12, h: 24 },
     { id: 'pasture',  name: 'Pasture',    x: 26, y: 0,  w: 12, h: 24 },
     { id: 'hillside', name: 'Hillside',   x: 12, y: 24, w: 14, h: 12 },
+    { id: 'orchard',  name: 'Orchard',    x: 0,  y: 24, w: 12, h: 12, free: true }, // free: Free Farm only (woods in the levels)
+    { id: 'bees',     name: 'Bee Garden', x: 26, y: 24, w: 12, h: 12, free: true },
   ],
 
   // ---- helpers; each is unlocked by an entry in UNLOCKS with the same id ----
@@ -119,10 +153,13 @@ export const CONFIG = {
     { id: 'hand_corn',   kind: 'farmhand', fields: ['cornA', 'cornB'],     crate: { x: 21.3, y: 7.2 } },
     { id: 'hand_wheat',  kind: 'farmhand', fields: ['wheat'],              crate: { x: 4.7, y: 7.6 } },
     { id: 'hand_pumpkin', kind: 'farmhand', fields: ['pumpkin'],           crate: { x: 16.7, y: 28.6 } },
+    { id: 'hand_apple',  kind: 'farmhand', fields: ['orchardA', 'orchardB'], crate: { x: 4.7, y: 30.6 } },
     { id: 'cashier',  kind: 'cashier' },
     { id: 'carrier1', kind: 'carrier', home: { x: 18, y: 15.6 } },
     { id: 'carrier2', kind: 'carrier', home: { x: 20, y: 15.6 } },
     { id: 'carrier3', kind: 'carrier', home: { x: 19, y: 14.8 } },
+    { id: 'carrier4', kind: 'carrier', home: { x: 17.6, y: 14.3 } },
+    { id: 'carrier5', kind: 'carrier', home: { x: 20.4, y: 14.3 } },
   ],
   crateCap: 40,
   harvestTimeHelper: .5,
@@ -161,6 +198,22 @@ export const UNLOCKS = [
   { id: 'sheep',        price: 1200, label: 'Sheep pen',       icon: '🐑', at: { x: 23.5, y: 28.5 } },
   { id: 'stand_wool',   price: 1000, label: 'Wool stand',      icon: '🧶', at: { x: 24.78, y: 13 }, after: 'sheep' },
   { id: 'hand_pumpkin', price: 1200, label: 'Pumpkin farmhand', icon: '🧑‍🌾', at: { x: 17.3, y: 30.4 }, after: 'pumpkin' },
+  // ---- Free Farm only: the Orchard and the Bee Garden, where the woods are in the levels ----
+  { id: 'orchard',      price: 3000, label: 'Open the Orchard', icon: '🚪', at: { x: 11.2, y: 23.2 } },
+  { id: 'orchardA',     price: 1500, label: 'Apple trees',     icon: '🍎', at: { x: 2.5, y: 28.5 } },
+  { id: 'stand_apple',  price: 1200, label: 'Apple stand',     icon: '🍎', at: { x: 6.6, y: 25.8 }, after: 'orchardA' },
+  { id: 'cider',        price: 2500, label: 'Cider press',     icon: '🧃', at: { x: 8, y: 31.7 }, after: 'orchardA' },
+  { id: 'stand_juice',  price: 2200, label: 'Juice stand',     icon: '🧃', at: { x: 9.4, y: 25.8 }, after: 'cider' },
+  { id: 'hand_apple',   price: 3000, label: 'Apple picker',    icon: '🧑‍🌾', at: { x: 5.4, y: 33.8 }, after: 'orchardA' },
+  { id: 'orchardB',     price: 3500, label: 'More apple trees', icon: '🍎', at: { x: 2.5, y: 32.5 } },
+  { id: 'carrier4',     price: 4000, label: '4th carrier',     icon: '🛒', at: { x: 17.6, y: 14.1 } },
+  { id: 'bees',         price: 8000, label: 'Open the Bee Garden', icon: '🚪', at: { x: 26.8, y: 23.2 } },
+  { id: 'hives',        price: 5000, label: 'Beehives',        icon: '🐝', at: { x: 34.5, y: 28.5 } },
+  { id: 'stand_honey',  price: 4000, label: 'Honey stand',     icon: '🍯', at: { x: 28.6, y: 25.8 }, after: 'hives' },
+  { id: 'kitchen',      price: 7000, label: 'Kitchen',         icon: '🍰', at: { x: 29.5, y: 32.2 }, after: 'hives' },
+  { id: 'stand_cake',   price: 6000, label: 'Cake stand',      icon: '🍰', at: { x: 31.4, y: 25.8 }, after: 'kitchen' },
+  { id: 'hivesB',       price: 9000, label: 'More hives',      icon: '🐝', at: { x: 34.5, y: 32.5 } },
+  { id: 'carrier5',     price: 10000, label: '5th carrier',    icon: '🛒', at: { x: 20.4, y: 14.1 } },
 ];
 export const SHOWN_UNLOCKS = 3;
 export const LOOKAHEAD = 2;        // how far past those 3 the game may look for a tile that's showable
@@ -220,7 +273,7 @@ export const STAR_TIME_LEFT = [.3, .1]; // finish with 30%+ of the time left = 3
 // levels can't end before their last inspection, so their clocks are last inspection / 0.7 (3 stars at the bell).
 
 // ---- Free Farm: the endless mode builds everything, saves as you go, and pays offline earnings ----
-export const FREE = { name: 'Free Farm', coins: 0, start: [], build: UNLOCKS.map(u => u.id), goals: [], tutorial: true };
+export const FREE = { free: true, name: 'Free Farm', coins: 0, start: [], build: UNLOCKS.map(u => u.id), goals: [], tutorial: true };
 
 // ---- meta progression for levels: seeds earned by winning, spent on permanent upgrades ----
 // reward: firstWin on a level's first win, perStar for each new star (over your best), replay for any win.
@@ -264,7 +317,7 @@ FREE.layout = { season: SEASON_ORDER[Math.floor(((new Date().getMonth() + 10) % 
 
 const inMarket = p => { const m = CONFIG.world.market; return p.x >= m.x && p.x <= m.x + m.w && p.y >= m.y && p.y <= m.y + m.h; };
 export function layoutFor(L) {
-  const lay = L.layout || { season: 'spring', mirror: false, decor: 0 };
+  const lay = L.layout || { season: 'spring', mirror: false, decor: 0 }, free = !!L.free;
   const W = CONFIG.world.cols, mx = lay.mirror ? x => W - x : x => x;
   // the market (stalls, register, road) never moves; everything around it swaps sides
   const pt = (p, force) => (p && (force || !inMarket(p)) ? { ...p, x: +mx(p.x).toFixed(2) } : p);
@@ -276,8 +329,34 @@ export function layoutFor(L) {
     pens: CONFIG.pens.map(p => ({ ...rect(p), pile: pt(p.pile) })),
     machines: CONFIG.machines.map(m => ({ ...m, x: mx(m.x), dir: (m.dir || 1) * (lay.mirror ? -1 : 1) })),
     helpers: CONFIG.helpers.map(h => ({ ...h, crate: pt(h.crate) })),
-    zones: CONFIG.zones.map(rect),
+    zones: CONFIG.zones.filter(z => free || !z.free).map(rect),
+    world: free ? { ...CONFIG.world, blocked: [] } : CONFIG.world, // Free Farm clears the woods for the Orchard and Bee Garden
   };
   const spots = DECOR_SPOTS.map(p => pt(p));
   return { C, unlocks: UNLOCKS.map(u => ({ ...u, at: pt(u.at, zoneIds.has(u.id)) })), theme: SEASONS[lay.season] || SEASONS.spring, season: lay.season, decor: lay.decor, spots };
+}
+
+// ---- Free Farm's County Fair: start over for ribbons; each ribbon is +10% on every sale, for good ----
+export const FAIR = { per: 2000, bonus: .1, startCoins: 50 };
+/** Ribbons a farm that has earned `earned` coins wins at the fair. */
+export const ribbonsFor = earned => Math.floor(Math.sqrt(Math.max(0, earned) / FAIR.per));
+/** Value and cost of upgrade `k` at level `lvl`; past the table only in Free Farm (endless). */
+export function upgradeValue(k, lvl) {
+  const u = CONFIG.upgrades[k], m = CONFIG.more[k], n = u.levels.length;
+  if (lvl < n || !m) return u.levels[Math.min(lvl, n - 1)];
+  const extra = lvl - n + 1, last = u.levels[n - 1];
+  let v = m.mult ? last * m.mult ** extra : last + m.step * extra;
+  if (m.cap !== undefined) v = m.mult ? Math.max(m.cap, v) : Math.min(m.cap, v);
+  return Math.round(v * 1000) / 1000;
+}
+export function upgradeCost(k, lvl) {
+  const u = CONFIG.upgrades[k], m = CONFIG.more[k];
+  if (lvl < u.cost.length) return u.cost[lvl];
+  return Math.round(u.cost[u.cost.length - 1] * m.costMult ** (lvl - u.cost.length + 1) / 10) * 10;
+}
+/** Is level `lvl` the last one? Levels mode: the table's end. Free Farm: only once a cap is reached. */
+export function upgradeMaxed(k, lvl, endless) {
+  const u = CONFIG.upgrades[k], m = CONFIG.more[k];
+  if (!endless || !m) return lvl >= u.cost.length;
+  return m.cap !== undefined && upgradeValue(k, lvl) === m.cap;
 }

@@ -109,6 +109,15 @@ try {
   ok(/Lv\s*2(?!\d)/.test(await page.textContent('#stage .stat')), 'slide: next level loads, progress saved');
   await page.click('#back');
 
+  // --- Free Farm's County Fair: a farm that earned 8000 wins 2 ribbons and starts fresh ---
+  await page.click('.tile[data-go="farm-free"]'); await page.waitForFunction(() => document.querySelector('.fm')?._dbg, null, { timeout: 5000 });
+  await page.evaluate(() => { const d = document.querySelector('.fm')._dbg; d.S.earned = 8000; d.unlock('carrotB'); });
+  await page.click('.fm-time'); await page.click('.panel .btn:has-text("County Fair")'); await page.click('.panel .btn:has-text("Enter for")');
+  await page.waitForFunction(() => document.querySelector('.fm')?._dbg && !document.querySelector('.fm')._dbg.on('carrotB'), null, { timeout: 5000 });
+  ok(await page.evaluate(() => JSON.parse(localStorage.getItem('fb_save_farm-fair')).ribbons === 2 && document.querySelector('.fm')._dbg.coins === 100), 'free farm: the County Fair gives ribbons and a fresh farm with a head start');
+  await page.evaluate(() => { localStorage.removeItem('fb_save_farm-fair'); localStorage.removeItem('fb_save_farm-free'); });
+  await page.click('#back');
+
   // --- Goat Pen: tap fences into the par pen, pen it, three stars ---
   await page.click('.tile[data-go="pen"]'); await page.waitForFunction(() => document.querySelector('.gp-tip')?.textContent);
   const pen = JSON.parse(await readFile(join(work, 'src/data/pen-levels.json'), 'utf8'))[0];

@@ -9,7 +9,7 @@ import { UNLOCKS } from './farm/config.js';
 export default {
   id: 'farm-free',
   name: 'Free Farm',
-  description: 'Sunny Acres with no clock: build the whole farm at your own pace. Helpers keep earning while you\'re away.',
+  description: 'Sunny Acres with no clock: build out to the Orchard and Bee Garden, upgrade forever, and win ribbons at the County Fair.',
   color: '--sky',
   icon: '<svg viewBox="0 0 40 40" fill="currentColor"><path d="M20 6c-6 0-10 5-10 11 0 5 4 9 10 9s10-4 10-9c0-6-4-11-10-11zM8 30h24v4H8z"/></svg>',
   art: `<svg viewBox="0 0 100 100"><rect width="100" height="100" fill="#7FC8F8"/><circle cx="78" cy="22" r="11" fill="#FFE066" stroke="#2B1D3A" stroke-width="3"/>
@@ -19,8 +19,8 @@ export default {
     <rect x="62" y="66" width="26" height="16" rx="3" fill="#9C6A43" stroke="#2B1D3A" stroke-width="3"/><g fill="#FF8A2A" stroke="#2B1D3A" stroke-width="2"><path d="M66 66l3-9 3 9z"/><path d="M73 66l3-9 3 9z"/><path d="M80 66l3-9 3 9z"/></g>
     <text x="50" y="94" font-size="12" font-weight="700" text-anchor="middle" font-family="Fredoka,sans-serif" fill="#2B1D3A">∞</text></svg>`,
   meta() {
-    const sv = loadSave('farm-free'), built = (sv?.unlocked || []).length;
-    return pills([{ value: `${COIN} ${sv?.coins ?? 0}`, cls: 'star' }, { label: 'Built', value: `${built}/${UNLOCKS.length}` }]);
+    const sv = loadSave('farm-free'), built = (sv?.unlocked || []).length, rib = loadSave('farm-fair')?.ribbons || 0;
+    return pills([{ value: `${COIN} ${sv?.coins ?? 0}`, cls: 'star' }, { label: 'Built', value: `${built}/${UNLOCKS.length}` }, ...(rib ? [{ value: `🎀 ${rib}` }] : [])]);
   },
   init(el) {
     let stop = null;

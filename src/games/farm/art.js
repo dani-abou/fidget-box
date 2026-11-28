@@ -62,6 +62,30 @@ const ITEM = {
     g.fillStyle = '#FFFFFF'; g.fill(); g.lineWidth = lw; g.strokeStyle = OUT; g.stroke(); g.fill();
     g.fillStyle = 'rgba(190,190,220,.5)'; g.beginPath(); g.arc(s * .55, s * .55, s * .08, 0, 7); g.fill();
   },
+  apple(g, s, lw) {
+    g.beginPath(); g.arc(s * .38, s * .58, s * .26, 0, 7); g.arc(s * .62, s * .58, s * .26, 0, 7); blob(g, '#E5484D', lw);
+    g.fillStyle = 'rgba(255,255,255,.55)'; g.beginPath(); g.ellipse(s * .36, s * .48, s * .06, s * .1, -.5, 0, 7); g.fill();
+    g.strokeStyle = '#6B4425'; g.lineWidth = lw; g.beginPath(); g.moveTo(s * .5, s * .36); g.lineTo(s * .53, s * .18); g.stroke();
+    g.beginPath(); g.ellipse(s * .63, s * .22, s * .11, s * .06, -.5, 0, 7); blob(g, '#4FB848', lw * .7);
+  },
+  juice(g, s, lw) {
+    rr(g, s * .3, s * .26, s * .4, s * .66, s * .08); blob(g, '#FFB020', lw);
+    rr(g, s * .3, s * .5, s * .4, s * .22, 0); g.fillStyle = '#FFFFFF'; g.fill();
+    g.beginPath(); g.arc(s * .5, s * .61, s * .08, 0, 7); g.fillStyle = '#E5484D'; g.fill();
+    g.strokeStyle = '#FF5A8A'; g.lineWidth = lw * 1.2; g.beginPath(); g.moveTo(s * .58, s * .3); g.lineTo(s * .66, s * .08); g.stroke();
+  },
+  honey(g, s, lw) {
+    rr(g, s * .24, s * .34, s * .52, s * .56, s * .14); blob(g, '#FFB627', lw);
+    rr(g, s * .28, s * .2, s * .44, s * .16, s * .05); blob(g, '#C98A50', lw * .8);
+    g.fillStyle = 'rgba(255,255,255,.5)'; g.beginPath(); g.ellipse(s * .36, s * .55, s * .05, s * .12, 0, 0, 7); g.fill();
+    g.fillStyle = '#8A4E1E'; g.font = `700 ${s * .2}px Fredoka, sans-serif`; g.textAlign = 'center'; g.fillText('H', s * .55, s * .7);
+  },
+  cake(g, s, lw) {
+    rr(g, s * .16, s * .46, s * .68, s * .42, s * .08); blob(g, '#F6C28B', lw);
+    rr(g, s * .16, s * .46, s * .68, s * .12, s * .06); blob(g, '#FFB627', lw * .8);
+    g.fillStyle = '#FFB627'; for (const x of [.28, .5, .72]) { g.beginPath(); g.ellipse(s * x, s * .6, s * .05, s * .08, 0, 0, 7); g.fill(); }
+    g.beginPath(); g.arc(s * .5, s * .36, s * .09, 0, 7); blob(g, '#E5484D', lw * .7);
+  },
   coin(g, s, lw) {
     g.beginPath(); g.arc(s * .5, s * .5, s * .38, 0, 7); blob(g, '#FFC93C', lw);
     g.beginPath(); g.arc(s * .5, s * .5, s * .25, 0, 7); g.strokeStyle = '#E09A10'; g.lineWidth = lw * .8; g.stroke();
@@ -83,6 +107,13 @@ export function createArt(T, dpr) {
   }
   const item = type => sprite('i:' + type, T * .56, (g, s, lw) => ITEM[type](g, s, lw));
   const crop = (type, stage) => sprite(`c:${type}:${stage}`, T, (g, s, lw) => {
+    if (type === 'apple') { // a little tree: sapling, then leafy, then hung with apples
+      rr(g, s * .45, s * (stage ? .5 : .6), s * .1, s * (stage ? .4 : .3), s * .03); blob(g, '#8A5A36', lw * .7);
+      if (!stage) { g.beginPath(); g.ellipse(s * .5, s * .56, s * .1, s * .07, 0, 0, 7); blob(g, '#6CCF5A', lw * .6); return; }
+      const r = stage === 1 ? .22 : .32; g.beginPath(); g.arc(s * .5, s * (.5 - r * .4), s * r, 0, 7); blob(g, '#4FAE4A', lw * .8);
+      if (stage === 3) for (const [x, y] of [[.38, .3], [.6, .26], [.5, .44], [.66, .42], [.34, .46]]) { g.beginPath(); g.arc(s * x, s * y, s * .06, 0, 7); blob(g, '#E5484D', lw * .5); }
+      return;
+    }
     if (stage === 0) { g.fillStyle = '#6B4425'; g.beginPath(); g.ellipse(s * .5, s * .6, s * .12, s * .06, 0, 0, 7); g.fill(); return; }
     if (stage === 1) { for (const a of [-.6, .6]) { g.beginPath(); g.ellipse(s * (.5 + a * .1), s * .55, s * .05, s * .12, a, 0, 7); blob(g, '#6CCF5A', lw * .6); } return; }
     if (stage === 2) { for (const a of [-.8, 0, .8]) { g.beginPath(); g.ellipse(s * (.5 + a * .14), s * .5, s * .07, s * .2, a, 0, 7); blob(g, '#58C24A', lw * .7); } return; }
@@ -109,7 +140,7 @@ export function createArt(T, dpr) {
       if (h > .82 && h < .86) { g.strokeStyle = th.tuft; g.lineWidth = lw * .7; g.beginPath(); const gx = (x + .3) * T, gy = (y + .6) * T; g.moveTo(gx, gy); g.lineTo(gx - T * .05, gy - T * .14); g.moveTo(gx, gy); g.lineTo(gx + T * .06, gy - T * .12); g.stroke(); }
     }
     // the woods beside the Hillside: darker ground under the trees drawn at the end
-    const W = CONFIG.world, M = W.market, R = W.road, mid = M.x + M.w / 2;
+    const W = LC.world || CONFIG.world, M = W.market, R = W.road, mid = M.x + M.w / 2, woods = W.blocked.length > 0;
     for (const b of W.blocked) { g.fillStyle = 'rgba(20,60,30,.22)'; g.fillRect(b.x * T, b.y * T, b.w * T, b.h * T); }
     // dirt paths out of the market in all four directions, then the plaza and the road
     g.fillStyle = th.path;
@@ -140,6 +171,12 @@ export function createArt(T, dpr) {
       rr(g, p.x * T, p.y * T, p.w * T, p.h * T, T * .3); blob(g, '#EBD27E', lw);
       g.strokeStyle = 'rgba(190,150,60,.5)'; g.lineWidth = lw * .6;
       for (let i = 0; i < 18; i++) { const sx = (p.x + .3 + hash(i, p.x) * (p.w - .6)) * T, sy = (p.y + .3 + hash(p.y, i) * (p.h - .6)) * T; g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx + T * .18, sy - T * .06); g.stroke(); }
+      if (p.animal === 'bee') for (const [hx, hy] of [[.9, 1.2], [2.1, 2.1]]) { // two hive boxes
+        const x = (p.x + hx) * T, y = (p.y + hy) * T;
+        for (let k = 0; k < 3; k++) { rr(g, x - T * .36, y - T * (.1 + k * .24), T * .72, T * .26, T * .05); blob(g, k % 2 ? '#F2C94C' : '#FFE08A', lw * .7); }
+        rr(g, x - T * .42, y - T * .78, T * .84, T * .14, T * .04); blob(g, '#B5733D', lw * .7);
+        g.fillStyle = INK; g.beginPath(); g.ellipse(x, y + T * .05, T * .08, T * .04, 0, 0, 7); g.fill();
+      }
       fenceRect(g, p.x, p.y, p.w, p.h, lw);
     }
     // closed zones: dimmed land behind a fence on every side that faces the farm
@@ -159,8 +196,9 @@ export function createArt(T, dpr) {
     const edge = [];
     for (let x = 1; x < cols; x += 2.6) edge.push([x + hash(x, 1) * 1.2, -.1]);
     for (let y = 1.5; y < R.y - .5; y += 2.6) for (const x of [-.2, cols + .2]) edge.push([x, y + hash(x, y) * 1.2]);
-    for (let x = M.x + 1; x < M.x + M.w; x += 2.6) edge.push([x + hash(x, 2) * 1.2, rows + .1]);
-    for (let y = R.y + R.h + 1; y < rows; y += 2.6) for (const x of [M.x - .3, M.x + M.w + .3]) edge.push([x, y + hash(x, y) * 1.2]);
+    for (let x = woods ? M.x + 1 : 1; x < (woods ? M.x + M.w : cols); x += 2.6) edge.push([x + hash(x, 2) * 1.2, rows + .1]);
+    if (woods) { for (let y = R.y + R.h + 1; y < rows; y += 2.6) for (const x of [M.x - .3, M.x + M.w + .3]) edge.push([x, y + hash(x, y) * 1.2]); }
+    else for (let y = R.y + R.h + 1; y < rows; y += 2.6) for (const x of [-.2, cols + .2]) edge.push([x, y + hash(x, y) * 1.2]);
     for (const b of W.blocked) for (let y = b.y + 1.4; y < b.y + b.h + .5; y += 1.7) for (let x = b.x + .8; x < b.x + b.w; x += 1.8) edge.push([x + (hash(x, y) - .5) * .8, y + (hash(y, x) - .5) * .6]);
     edge.sort((p, q) => p[1] - q[1]);
     for (const [x, y] of edge) tree(g, x, y, lw, leaf(x, y), th.snow);
@@ -308,6 +346,11 @@ export function createArt(T, dpr) {
       rr(g, s * .28, -s * .44, s * .2, s * .12, s * .05); blob(g, '#FFB3C1', lw * .8);
       g.fillStyle = INK; g.beginPath(); g.arc(s * .33, -s * .53, s * .02, 0, 7); g.fill();
       g.fillStyle = INK; for (const lx of [-.3, -.12, .06, .2]) g.fillRect(s * lx, -s * .14, s * .06, s * .14);
+    } else if (kind === 'bee') { // flies about over the hives: no shadow hop, a bigger bob
+      const fy = -s * (.55 + Math.sin(t * 7) * .08);
+      for (const d of [-1, 1]) { g.beginPath(); g.ellipse(d * s * .05, fy - s * .1, s * .07, s * .11, d * .5, 0, 7); g.fillStyle = 'rgba(255,255,255,.85)'; g.fill(); g.lineWidth = lw * .5; g.strokeStyle = OUT; g.stroke(); }
+      g.beginPath(); g.ellipse(0, fy, s * .13, s * .09, 0, 0, 7); blob(g, '#FFD23F', lw * .7);
+      g.fillStyle = INK; for (const dx of [-.04, .04]) g.fillRect(s * (dx - .015), fy - s * .08, s * .03, s * .16);
     } else {
       g.beginPath(); for (const [px, py] of [[-.18, -.3], [0, -.36], [.16, -.3], [-.08, -.22], [.08, -.22]]) { g.moveTo(s * px + s * .15, s * py); g.arc(s * px, s * py, s * .15, 0, 7); }
       g.fillStyle = '#FFFFFF'; g.fill(); g.lineWidth = lw; g.strokeStyle = OUT; g.stroke(); g.fill();
@@ -318,7 +361,7 @@ export function createArt(T, dpr) {
   }
 
   // ---------- buildings ----------
-  const AWNING = { carrot: '#FF8A2A', corn: '#F2C12E', egg: '#7FC8F8', bread: '#D98B3A', pumpkin: '#FF7A1A', cheese: '#F5C842', wool: '#B9A7F0' };
+  const AWNING = { carrot: '#FF8A2A', corn: '#F2C12E', egg: '#7FC8F8', bread: '#D98B3A', pumpkin: '#FF7A1A', cheese: '#F5C842', wool: '#B9A7F0', apple: '#E5484D', juice: '#FFB020', honey: '#FFB627', cake: '#FF8FB1' };
   function stand(g, x, y, product) {
     const s = T, lw = Math.max(1.5, s * .05);
     rr(g, x - s * .8, y - s * .2, s * 1.6, s * .75, s * .12); blob(g, '#C98A50', lw);
@@ -341,6 +384,17 @@ export function createArt(T, dpr) {
       rr(g, x - s * .4, y - s * .25 + wob, s * .8, s * .55, s * .25); blob(g, busy ? '#FFB347' : '#5A3A2A', lw);
       rr(g, x + s * .3, y - s * 1.0, s * .22, s * .45, s * .05); blob(g, '#9C6A43', lw);
       if (busy) for (let i = 0; i < 3; i++) { const k = (t * .7 + i / 3) % 1; g.fillStyle = `rgba(255,255,255,${.6 * (1 - k)})`; g.beginPath(); g.arc(x + s * (.41 + Math.sin(k * 6) * .08), y - s * (1.05 + k * .7), s * (.08 + k * .1), 0, 7); g.fill(); }
+    } else if (m.id === 'cider') { // a barrel under a screw press
+      g.beginPath(); g.ellipse(x, y + s * .05 + wob, s * .5, s * .5, 0, 0, 7); blob(g, '#B5733D', lw);
+      g.strokeStyle = '#7A4A26'; g.lineWidth = lw; for (const dy of [-.25, .3]) { g.beginPath(); g.moveTo(x - s * .48, y + s * dy); g.lineTo(x + s * .48, y + s * dy); g.stroke(); }
+      rr(g, x - s * .6, y - s * .75, s * 1.2, s * .18, s * .05); blob(g, '#9C6A43', lw);
+      g.save(); g.translate(x, y - s * .66); g.rotate(busy ? t * 4 : 0); rr(g, -s * .45, -s * .05, s * .9, s * .1, s * .04); blob(g, '#6B6880', lw * .7); g.restore();
+    } else if (m.id === 'kitchen') { // a pink cottage with a chimney
+      rr(g, x - s * .65, y - s * .55 + wob, s * 1.3, s * 1.1, s * .15); blob(g, '#FFB3C8', lw);
+      g.beginPath(); g.moveTo(x - s * .8, y - s * .5); g.lineTo(x, y - s * 1.1); g.lineTo(x + s * .8, y - s * .5); g.closePath(); blob(g, '#E5484D', lw);
+      rr(g, x - s * .2, y - s * .1 + wob, s * .4, s * .55, s * .15); blob(g, busy ? '#FFD23F' : '#8A5A36', lw);
+      rr(g, x + s * .3, y - s * 1.05, s * .18, s * .35, s * .04); blob(g, '#9C6A43', lw);
+      if (busy) for (let i = 0; i < 3; i++) { const k = (t * .7 + i / 3) % 1; g.fillStyle = `rgba(255,255,255,${.6 * (1 - k)})`; g.beginPath(); g.arc(x + s * .39, y - s * (1.1 + k * .7), s * (.07 + k * .1), 0, 7); g.fill(); }
     } else {
       rr(g, x - s * .62, y - s * .45 + wob, s * 1.24, s * .95, s * .25); blob(g, "#7FB4E8", lw);
       rr(g, x - s * .5, y - s * .7, s * 1.0, s * .3, s * .1); blob(g, '#FFFFFF', lw);
