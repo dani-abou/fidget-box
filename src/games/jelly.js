@@ -254,14 +254,19 @@ export default {
       g.fillStyle = 'rgba(255,255,255,.42)';
       for (const [r, c] of rel) { g.beginPath(); g.roundRect(x0 + c * cs + cs * .16, y0 + r * cs + cs * .14, cs * .3, cs * .12, cs * .06); g.fill(); }
       const [fr, fc] = rel[rel.length >> 1], fx0 = x0 + (fc + .5) * cs, fy0 = y0 + (fr + .55) * cs;
+      if (!b.axis) {
       g.fillStyle = INK; for (const dx of [-.12, .12]) { g.beginPath(); g.arc(fx0 + dx * cs, fy0, cs * .05, 0, 7); g.fill(); }
       g.lineWidth = Math.max(1.5, cs * .035); g.strokeStyle = INK; g.beginPath(); g.arc(fx0, fy0 + cs * .06, cs * .07, .3, Math.PI - .3); g.stroke();
-      if (b.axis) { // one-way stripes
-        g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = Math.max(2, cs * .06); g.lineCap = 'round';
-        for (const [r, c] of rel) { const x = x0 + c * cs, y = y0 + r * cs; g.beginPath();
-          if (b.axis === 'h') { g.moveTo(x + cs * .2, y + cs * .8); g.lineTo(x + cs * .8, y + cs * .8); } else { g.moveTo(x + cs * .82, y + cs * .2); g.lineTo(x + cs * .82, y + cs * .8); } g.stroke(); }
-        g.fillStyle = '#fff'; g.font = `700 ${cs * .32}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText(b.axis === 'h' ? '⇆' : '⇅', x0 + (rel[0][1] + .5) * cs, y0 + (rel[0][0] + .28) * cs);
+      }
+      if (b.axis) { // one-way: a groove with a bold double arrow on every square, so it reads at a glance
+        const hz = b.axis === 'h';
+        for (const [r, c] of rel) {
+          const mx = x0 + (c + .5) * cs, my = y0 + (r + .52) * cs;
+          g.fillStyle = 'rgba(26,18,56,.28)'; g.beginPath();
+          if (hz) g.roundRect(x0 + c * cs + cs * .08, my - cs * .13, cs * .84, cs * .26, cs * .13); else g.roundRect(mx - cs * .13, y0 + r * cs + cs * .08, cs * .26, cs * .84, cs * .13);
+          g.fill();
+          dblArrow(mx, my, hz, cs * .36);
+        }
       }
       if (b.key) badge(x0 + (rel[0][1] + .78) * cs, y0 + (rel[0][0] + .22) * cs, '🔑');
       if (b.lock && S.blocks.some(k => k.key === b.lock && !k.gone)) {
@@ -273,6 +278,24 @@ export default {
         roundCells(rel, cs * .04, cs * .24, x0, y0); g.fillStyle = 'rgba(210,240,255,.72)'; g.fill(); g.lineWidth = 2; g.strokeStyle = '#fff'; g.stroke();
         num(x0 + (cc + .5) * cs, y0 + (cr + .5) * cs, b.ice - S.out, '#2E7CC0');
       }
+      g.restore();
+    }
+    // a double-headed arrow centred on (x, y), half-length `h`, outlined so it reads on any colour
+    function dblArrow(x, y, horiz, h) {
+      const t = h * .32, hw = h * .62, hl = h * .5;
+      g.save(); g.translate(x, y); if (!horiz) g.rotate(Math.PI / 2);
+      g.beginPath();
+      g.moveTo(-h, 0); g.lineTo(-h + hl, -hw); g.lineTo(-h + hl, -t / 2); g.lineTo(h - hl, -t / 2); g.lineTo(h - hl, -hw);
+      g.lineTo(h, 0); g.lineTo(h - hl, hw); g.lineTo(h - hl, t / 2); g.lineTo(-h + hl, t / 2); g.lineTo(-h + hl, hw); g.closePath();
+      g.lineJoin = 'round'; g.lineWidth = Math.max(2.5, cs * .07); g.strokeStyle = INK; g.stroke(); g.fillStyle = '#FFFFFF'; g.fill();
+      g.restore();
+    }
+    // a gate's arrow: a drawn triangle (text arrows turn into emoji on iPhones)
+    function gateArrow(x, y, side, sz) {
+      const rot = { up: 0, right: Math.PI / 2, down: Math.PI, left: -Math.PI / 2 }[side];
+      g.save(); g.translate(x, y); g.rotate(rot);
+      g.beginPath(); g.moveTo(0, -sz * .55); g.lineTo(sz * .6, sz * .4); g.lineTo(-sz * .6, sz * .4); g.closePath();
+      g.lineJoin = 'round'; g.fillStyle = 'rgba(255,255,255,.95)'; g.fill(); g.lineWidth = 2; g.strokeStyle = 'rgba(26,18,56,.35)'; g.stroke();
       g.restore();
     }
     function badge(x, y, ch) { g.font = `${cs * .34}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(ch, x, y); }
@@ -304,7 +327,7 @@ export default {
         const w = vert ? gt.len * cs - 6 : th, h = vert ? th : gt.len * cs - 6, iced = gt.ice && S.out < gt.ice;
         g.beginPath(); g.roundRect(x, y, w, h, cs * .14); g.fillStyle = iced ? '#D2F0FF' : HUE[gt.color]; g.fill(); g.lineWidth = 2.5; g.strokeStyle = INK; g.stroke();
         if (iced) { g.fillStyle = HUE[gt.color]; g.beginPath(); g.roundRect(x + (vert ? 0 : w * .3), y + (vert ? h * .3 : 0), vert ? w : w * .4, vert ? h * .4 : h, 3); g.globalAlpha = .5; g.fill(); g.globalAlpha = 1; num(x + w / 2, y + h / 2, gt.ice - S.out, '#2E7CC0'); }
-        else { g.fillStyle = 'rgba(255,255,255,.9)'; g.font = `700 ${cs * .32}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText({ up: '▲', down: '▼', left: '◀', right: '▶' }[gt.side], x + w / 2, y + h / 2 + 1); }
+        else gateArrow(x + w / 2, y + h / 2, gt.side, cs * .3);
       }
       // crates
       for (const cr of L.crates || []) if (S.out < cr.n) {
