@@ -228,6 +228,7 @@ export function runLevel(el, n, api, mode = 'levels') {
   const customers = [], flying = [], coinsFx = [], floaters = [], puffs = [];
   let shake = 0, raf, last = performance.now(), dead = false, saveT = 3, offlinePanel = null;
   let W = 0, H = 0, T = 40, dpr = 1, art = null, groundCv = null, camX = 0, camY = 0, coinShown = S.coins, padAcc = 0, padFx = 0;
+  let shipped = 0, shipT = 0, binHint = false, binDwell = 0;
   let custT = 1, checkoutT = 0, clinkT = 0, sheetFor = null, tileDwell = 0, lastTile = null;
 
   const cap = () => up(S, 'carry');
@@ -394,6 +395,7 @@ export function runLevel(el, n, api, mode = 'levels') {
       }
     }
     // --- player picks up from piles / crates / machine outputs, and drops at stands / machine inputs ---
+    binDwell = d2(P, C.shipBin) < .8 ? binDwell + dt : 0;
     P.actT -= dt;
     if (P.actT <= 0) {
       let acted = false;
@@ -409,6 +411,12 @@ export function runLevel(el, n, api, mode = 'levels') {
         P.actT = C.player.dropInterval;
         if (S.tut === 1 && sk.obj.product) S.tut = 2;
         break;
+      }
+      // the shipping bin takes anything, one item at a time, for a cut of the price
+      if (!acted && P.stack.length && binDwell >= UNLOCK_DWELL) { // after a moment's stand, so walking across sells nothing
+        const it = P.stack.pop(), pay = Math.max(C.shipBin.min, Math.floor(C.products[it.t].price * C.shipBin.rate * bonus.prices));
+        S.coins += pay; S.earned += pay; shipped += pay; shipT = .8;
+        fly(it.t, { x: P.x, y: P.y - 1.2 }, C.shipBin, .22); sClink(); P.actT = C.player.dropInterval;
       }
     }
     // --- animals ---
@@ -447,6 +455,8 @@ export function runLevel(el, n, api, mode = 'levels') {
       if (S.partial[onTile.id] >= onTile.price) unlock(onTile);
     } else padAcc = 0;
     // --- upgrade mat ---
+    if (!binHint && P.stack.length >= cap() && !nearestSink()) { binHint = true; float(P.x, P.y - 1.8, 'Nowhere for that? Sell it at the bin', '#FFFFFF'); }
+    if (shipped && (shipT -= dt) <= 0) { float(C.shipBin.x, C.shipBin.y - 1.2, `Shipped +${shipped}`, '#FFD23F'); coinsTo(C.shipBin, Math.min(8, 2 + shipped / 5)); shipped = 0; }
     const onMat = d2(P, C.upgradeMat) < .75;
     if (onMat && sheetFor !== 'up') openSheet(); else if (!onMat && sheetFor) closeSheet();
 
@@ -798,7 +808,7 @@ export function runLevel(el, n, api, mode = 'levels') {
     let at = null;
     const queueWaiting = customers.some(c => c.state === 'queue') && !helpers.some(h => h.kind === 'cashier');
     if (goal && S.coins + (S.partial[goal.id] || 0) >= goal.price) at = goal.at;
-    else if (P.stack.length >= capN) at = nearestSink();
+    else if (P.stack.length >= capN) at = nearestSink() || C.shipBin; // nowhere to put it: sell it off
     else if (queueWaiting && customers.filter(c => c.state === 'queue').length >= 2) at = C.register.mat;
     else if (P.stack.length && nearestSink()) at = nearestSink();
     else at = nearestSource();
@@ -884,6 +894,7 @@ export function runLevel(el, n, api, mode = 'levels') {
     // floor mats: register + upgrades
     art.mat(g, X(C.register.mat.x), Y(C.register.mat.y), 'rgba(63,182,142,.55)', '');
     art.mat(g, X(C.upgradeMat.x), Y(C.upgradeMat.y), 'rgba(94,168,255,.6)', 'UPGRADES');
+    art.bin(g, X(C.shipBin.x), Y(C.shipBin.y), d2(P, C.shipBin) < .8 && P.stack.length > 0);
     // unlock tiles
     for (const u of visibleTiles()) if (onScreen(u.at.x, u.at.y)) drawTile(u, t);
     // machines with their input/output piles
@@ -1092,7 +1103,7 @@ export function runLevel(el, n, api, mode = 'levels') {
   else intro();
 
   // handle for the automated checks (scripts/verify.mjs, tests); not used by the game
-  root._dbg = { get shake() { return shake; }, crows, orders, cart, insp, L, n, goals, focus, go() { el.querySelectorAll('.ov').forEach(o => o.remove()); S.phase = 'play'; }, perf, unlock: id => unlock(TILES.find(u => u.id === id)), S, P, on, cap, fields, pens, machines, stands, crates, helpers, customers, visibleTiles, sinks, sources, save, update, objective, flying, get coins() { return S.coins; }, set coins(v) { S.coins = v; coinShown = v; } };
+  root._dbg = { C, get shake() { return shake; }, crows, orders, cart, insp, L, n, goals, focus, go() { el.querySelectorAll('.ov').forEach(o => o.remove()); S.phase = 'play'; }, perf, unlock: id => unlock(TILES.find(u => u.id === id)), S, P, on, cap, fields, pens, machines, stands, crates, helpers, customers, visibleTiles, sinks, sources, save, update, objective, flying, get coins() { return S.coins; }, set coins(v) { S.coins = v; coinShown = v; } };
   raf = requestAnimationFrame(frame);
   return () => {
     dead = true; cancelAnimationFrame(raf); ro.disconnect(); save();

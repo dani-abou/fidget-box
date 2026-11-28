@@ -133,6 +133,8 @@ try {
   ok(picked >= 2, `farm: walking over carrots picks them (${picked} on your back)`);
   await page.evaluate(() => { const d = document.querySelector('.fm')._dbg; d.P.x = d.stands[0].at.x; d.P.y = d.stands[0].at.y + .3; });
   ok(await page.waitForFunction(() => document.querySelector('.fm')._dbg.stands[0].stock > 0, null, { timeout: 3000 }).then(() => true, () => false), 'farm: standing at the stand stocks it');
+  const before = await page.evaluate(() => { const d = document.querySelector('.fm')._dbg; d.P.stack.push({ t: 'corn', pop: 1 }, { t: 'corn', pop: 1 }); d.P.x = d.C.shipBin.x; d.P.y = d.C.shipBin.y; return { coins: d.coins, n: d.P.stack.length }; });
+  ok(await page.waitForFunction(b => { const d = document.querySelector('.fm')._dbg; return d.P.stack.length < b.n && d.coins > b.coins; }, before, { timeout: 3000 }).then(() => true, () => false), 'farm: the shipping bin buys what you carry');
   await page.click('#back');
 
   // --- Free Farm: no clock, straight into play ---

@@ -82,6 +82,9 @@ export const CONFIG = {
   register: { mat: { x: 21.7, y: 17.1 }, counter: { x: 20.6, y: 17.1 }, playerTime: .45, cashierTime: .9,
     queue: [[19.4, 17.1], [18.4, 17.4], [17.4, 17.8], [16.4, 18.2], [15.4, 18.6], [14.4, 19]] },
   upgradeMat: { x: 24.3, y: 19.4 },
+  // shipping bin: stand on it to sell whatever you carry at a share of the price, so a full basket
+  // never has to wait for a stall to empty. Wheat, flour and milk (no stall price) still fetch `min`.
+  shipBin: { x: 13.4, y: 17.3, rate: .5, min: 1 },
 
   // ---- level events (only in levels whose goals use them) ----
   cart: { x: 24.4, y: 15.9 },                       // festival cart: { fill: { carrot: 8, ... } }

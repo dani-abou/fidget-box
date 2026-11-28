@@ -364,5 +364,14 @@ export function createArt(T, dpr) {
     rr(g, x - s * .62, y - s * .45, s * 1.24, s * .9, s * .2); g.fillStyle = color; g.fill(); g.lineWidth = Math.max(2, s * .05); g.strokeStyle = 'rgba(255,255,255,.85)'; g.setLineDash([s * .14, s * .1]); g.stroke(); g.setLineDash([]);
     if (label) { g.fillStyle = '#fff'; g.font = `600 ${s * .26}px Fredoka, sans-serif`; g.textAlign = 'center'; g.fillText(label, x, y + s * .1); }
   }
-  return { item, crop, ground, person, animal, stand, machine, crate, register, mat, T, dpr };
+  function bin(g, x, y, active) { // the shipping bin: a mat to stand on and a slatted crate behind it
+    const s = T, lw = Math.max(1.5, s * .05);
+    mat(g, x, y, active ? 'rgba(255,210,63,.75)' : 'rgba(255,170,60,.5)', '');
+    rr(g, x - s * .5, y - s * 1.15, s * 1, s * .62, s * .08); blob(g, '#C98A50', lw);
+    g.strokeStyle = '#8A5A36'; g.lineWidth = lw * .7;
+    for (const f of [.33, .66]) { g.beginPath(); g.moveTo(x - s * .45, y - s * 1.15 + s * .62 * f); g.lineTo(x + s * .45, y - s * 1.15 + s * .62 * f); g.stroke(); }
+    g.font = `700 ${s * .22}px Fredoka, sans-serif`; g.textAlign = 'center'; g.lineWidth = 3; g.strokeStyle = INK; g.fillStyle = '#FFE066';
+    g.strokeText('SELL ½', x, y + s * .08); g.fillText('SELL ½', x, y + s * .08);
+  }
+  return { item, crop, ground, person, animal, stand, machine, crate, register, mat, bin, T, dpr };
 }
