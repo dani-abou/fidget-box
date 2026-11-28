@@ -132,3 +132,82 @@ export function solvable(L, budget = 20000) {
   return go(makeState(L));
 }
 
+
+/**
+ * Where block i can go: like reachable(), but a spot where it would leave (or
+ * peel) through a gate is an end: dragging there sends it out. Returns
+ * { spots: [[r, c]...] (not counting where it is), exit: [r, c] | null }.
+ */
+export function explore(S, i, occ = occupancy(S, i)) {
+  const b = S.blocks[i], W = S.L.w, r0 = b.r, c0 = b.c, seen = new Set([r0 * W + c0]), q = [[r0, c0]], spots = [];
+  let exit = null;
+  const fitsHere = (r, c) => { b.r = r; b.c = c; const ok = S.L.gates.some(g => fitsGate(S, i, g, occ)); b.r = r0; b.c = c0; return ok; };
+  const free = (r, c) => b.cells.every(([dr, dc]) => { const rr = r + dr, cc = c + dc; return rr >= 0 && cc >= 0 && rr < S.L.h && cc < W && occ[rr * W + cc] === -1; });
+  if (fitsHere(r0, c0)) return { spots, exit: [r0, c0] };
+  for (let k = 0; k < q.length; k++) {
+    const [r, c] = q[k];
+    for (const [dr, dc] of Object.values(DIRS)) {
+      if ((b.axis === 'h' && dr) || (b.axis === 'v' && dc)) continue;
+      const nr = r + dr, nc = c + dc, key = nr * W + nc;
+      if (seen.has(key) || !free(nr, nc)) continue;
+      seen.add(key);
+      if (fitsHere(nr, nc)) { exit ||= [nr, nc]; continue; }
+      spots.push([nr, nc]); q.push([nr, nc]);
+    }
+  }
+  return { spots, exit };
+}
+
+const cloneS = S => ({ L: S.L, out: S.out, blocks: S.blocks.map(b => ({ ...b })) });
+/** Send out (or peel) every jelly that can reach a gate; that never hurts. Returns how many went. */
+function settle(S) {
+  let n = 0;
+  for (let again = true; again;) {
+    again = false;
+    for (let i = 0; i < S.blocks.length; i++) {
+      const b = S.blocks[i]; if (b.gone || locked(S, b)) continue;
+      const { exit } = explore(S, i);
+      if (exit) { b.r = exit[0]; b.c = exit[1]; passGate(S, i); n++; again = true; }
+    }
+  }
+  return n;
+}
+/**
+ * Full solver: the fewest shuffles (moves that don't send a jelly out) that clear
+ * the board, letting jellies out whenever they can reach a gate. -1 if unsolvable,
+ * null if it gave up after `limit` positions.
+ */
+export function shufflesToSolve(L, limit = 60000) {
+  const start = cloneS(makeState(L)); settle(start);
+  const key = S => S.out + '|' + S.blocks.map(b => (b.gone ? 'x' : `${b.r},${b.c},${b.color}`)).join(';');
+  const seen = new Set([key(start)]); let frontier = [start];
+  for (let d = 0; frontier.length; d++) {
+    const next = [];
+    for (const S of frontier) {
+      if (won(S)) return d;
+      for (let i = 0; i < S.blocks.length; i++) {
+        const b = S.blocks[i]; if (b.gone || locked(S, b)) continue;
+        for (const [r, c] of explore(S, i).spots) {
+          const T = cloneS(S); T.blocks[i].r = r; T.blocks[i].c = c; settle(T);
+          const k = key(T); if (seen.has(k)) continue; seen.add(k);
+          if (seen.size > limit) return null;
+          next.push(T);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return -1;
+}
+
+/** Is there a float position (r, c) for block i where it overlaps only free floor? (smooth dragging) */
+export function freeAt(S, i, r, c, occ = occupancy(S, i)) {
+  const b = S.blocks[i], W = S.L.w, e = 1e-6;
+  for (const [dr, dc] of b.cells) {
+    const y = r + dr, x = c + dc;
+    for (let rr = Math.floor(y + e); rr <= Math.floor(y + 1 - e); rr++) for (let cc = Math.floor(x + e); cc <= Math.floor(x + 1 - e); cc++) {
+      if (rr < 0 || cc < 0 || rr >= S.L.h || cc >= W || occ[rr * W + cc] !== -1) return false;
+    }
+  }
+  return true;
+}

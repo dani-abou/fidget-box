@@ -225,7 +225,13 @@ check('jelly gates: gates, fit, ice, chains, layers, crates, one-way', () => {
 check('jelly gates levels: 60, every one solvable with the game rules', () => {
   const lv = JSON.parse(readFileSync(new URL('../src/data/jelly-levels.json', import.meta.url)));
   assert.equal(lv.length, 60);
-  lv.forEach((L, k) => assert.ok(JL.solvable(L, 50000), `level ${k + 1} is solvable`));
+  lv.forEach((L, k) => assert.ok(L.packed ? JL.shufflesToSolve(L, 80000) === L.shuffles : JL.solvable(L, 50000), `level ${k + 1} is solvable`));
+  const packed = lv.filter(L => L.packed);
+  assert.ok(packed.length >= 14 && packed.every(L => L.shuffles >= 1), 'every 4th level is packed and needs shuffling');
+  for (const L of packed) { // filled: at most one small jelly's worth of empty floor
+    const empty = L.w * L.h - L.blocks.reduce((a, b) => a + b.cells.length, 0);
+    assert.ok(empty <= 2, `packed level leaves ${empty} empty`);
+  }
 });
 
 console.log(fails ? `\n${fails} failed` : '\nall logic checks passed');

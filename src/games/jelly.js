@@ -5,7 +5,7 @@ import { ac, buzz, click, tone } from '../lib/sound.js';
 import { progress, loadSave, writeSave } from '../lib/progress.js';
 import { panel, levelPicker, starsHTML, pills } from '../lib/ui.js';
 import { confetti, floater, shake } from '../lib/fx.js';
-import { makeState, reachable, occupancy, gateFor, passGate, locked, won, absCells, DIRS } from './jelly/logic.js';
+import { makeState, reachable, occupancy, gateFor, passGate, locked, won, absCells, DIRS, freeAt } from './jelly/logic.js';
 
 const INK = '#1A1238';
 const HUE = { red: '#FF5A6E', blue: '#4DA6FF', yellow: '#FFD23F', green: '#4FD67A', purple: '#A77BFF', orange: '#FF9A3C' };
@@ -114,16 +114,54 @@ export default {
       }
       cv.setPointerCapture(e.pointerId);
       hist.push(snapshot()); if (hist.length > 60) hist.shift();
-      drag = { i, r0: b.r, c0: b.c, pr: r, pc: c, moved: false };
+      drag = { i, r0: b.r, c0: b.c, pr: r, pc: c, fr: b.r, fc: b.c, occ: occupancy(S, i), lastCell: b.r * 100 + b.c };
       click(500, .02, .1, 'sine');
     });
+    // Smooth dragging: the jelly follows your finger in any direction (diagonals too) in small
+    // steps, sliding along whatever it touches instead of stopping, and easing into gaps it's
+    // nearly lined up with. It snaps to the nearest square when you let go.
+    const STEP = .1, EASE = .45;
+    const near = v => Math.abs(v - Math.round(v));
+    function glide(tr, tc) {
+      const d = drag, b = S.blocks[d.i], ok = (r, c) => freeAt(S, d.i, r, c, d.occ);
+      let dy = b.axis === 'h' ? 0 : tr - d.fr, dx = b.axis === 'v' ? 0 : tc - d.fc;
+      const n = Math.ceil(Math.max(Math.abs(dy), Math.abs(dx)) / STEP);
+      for (let k = 0; k < n && drag; k++) {
+        const sy = dy / n, sx = dx / n;
+        // the way your finger mostly goes wins: if that's blocked, first ease back into line with the
+        // row (or column) rather than drift off it, so a jelly never snags on a corner by a hair
+        const tryX = () => sx && ok(d.fr, d.fc + sx) && ((d.fc += sx), true);
+        const tryY = () => sy && ok(d.fr + sy, d.fc) && ((d.fr += sy), true);
+        const ease = (axisR, amt) => {
+          const v = axisR ? d.fr : d.fc, a = Math.round(v); if (Math.abs(a - v) < 1e-9 || near(v) > EASE) return false;
+          const st = Math.sign(a - v) * Math.min(Math.abs(a - v), Math.max(Math.abs(amt), STEP * .5));
+          if (axisR ? !ok(d.fr + st, d.fc) : !ok(d.fr, d.fc + st)) return false;
+          if (axisR) d.fr += st; else d.fc += st; return true;
+        };
+        if (ok(d.fr + sy, d.fc + sx)) { d.fr += sy; d.fc += sx; }
+        else if (Math.abs(sx) >= Math.abs(sy)) { tryX() || ease(true, sx) || tryY() || ease(false, sy); }
+        else { tryY() || ease(false, sy) || tryX() || ease(true, sx); }
+        view[d.i].r = d.fr; view[d.i].c = d.fc; view[d.i].path = [];
+        // lined up with a square? that's where it is now; on a gate of its colour it leaves
+        const rr = Math.round(d.fr), rc = Math.round(d.fc);
+        if (near(d.fr) < .22 && near(d.fc) < .22 && rr * 100 + rc !== d.lastCell) {
+          d.lastCell = rr * 100 + rc; b.r = rr; b.c = rc; d.moved = true;
+          click(720 + (rr + rc) * 25, .015, .06, 'triangle');
+          checkGate(d.i);
+        }
+      }
+    }
     cv.addEventListener('pointermove', e => {
       if (!drag || phase !== 'play') return;
-      const [r, c] = cellAt(e), tr = Math.round(drag.r0 + r - drag.pr), tc = Math.round(drag.c0 + c - drag.pc);
-      const b = S.blocks[drag.i];
-      if (tr !== b.r || tc !== b.c) { drag.moved = true; moveTo(drag.i, tr, tc); hud(); }
+      const [r, c] = cellAt(e); glide(drag.r0 + r - drag.pr, drag.c0 + c - drag.pc);
     });
-    const up = () => { if (drag && !drag.moved) hist.pop(); drag = null; hud(); };
+    const up = () => {
+      if (drag) {
+        const b = S.blocks[drag.i]; b.r = Math.round(drag.fr); b.c = Math.round(drag.fc); // the nearest square is always free
+        if (b.r === drag.r0 && b.c === drag.c0 && !gateFor(S, drag.i)) hist.pop(); else checkGate(drag.i); // a tap sends out a jelly already at its gate
+      }
+      drag = null; hud();
+    };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
 
     undoBtn.onclick = () => { const h = hist.pop(); if (!h || phase !== 'play') return; restore(h); click(600, .03, .15); hud(); };
@@ -298,7 +336,7 @@ export default {
         view.forEach((v, i) => {
           const b = S.blocks[i];
           if (v.path.length) { const [tr, tc] = v.path[0], d = Math.hypot(tr - v.r, tc - v.c), step = dt * 22; if (d <= step) { v.r = tr; v.c = tc; v.path.shift(); } else { v.r += (tr - v.r) / d * step; v.c += (tc - v.c) / d * step; } }
-          else if (!v.exit) { v.r = b.r; v.c = b.c; }
+          else if (!v.exit && drag?.i !== i) { const k = Math.min(1, dt * 20); v.r += (b.r - v.r) * k; v.c += (b.c - v.c) * k; if (Math.abs(b.r - v.r) + Math.abs(b.c - v.c) < .01) { v.r = b.r; v.c = b.c; } } // settle onto the square
           if (v.exit && !v.path.length) { const [dr, dc] = DIRS[v.exit]; v.out += dt * 2.5; v.r += dr * dt * 9; v.c += dc * dt * 9; }
           if (v.pop) v.pop = Math.max(0, v.pop - dt * 3);
         });

@@ -127,12 +127,14 @@ try {
         for (let i = 0; i < S.blocks.length; i++) { const b = S.blocks[i]; if (b.gone || lg.locked(S, b)) continue;
           const r0 = b.r, c0 = b.c;
           for (const k of lg.reachable(S, i).keys()) { b.r = Math.floor(k / L.w); b.c = k % L.w; const ok = lg.gateFor(S, i); b.r = r0; b.c = c0;
-            if (ok) return { from: [r0 + b.cells[0][0], c0 + b.cells[0][1]], to: [Math.floor(k / L.w) + b.cells[0][0], k % L.w + b.cells[0][1]], w: L.w }; } }
+            if (ok) { const reach = lg.reachable(S, i), path = []; for (let p = k; p !== -1; p = reach.get(p)) path.unshift([Math.floor(p / L.w) + b.cells[0][0], p % L.w + b.cells[0][1]]); return { path, w: L.w }; } } }
         return null; });
       if (!plan) break;
-      const cs = box.width / (plan.w + 1.4), at = ([r, c]) => [box.x + (c + 1.2) * cs, box.y + (r + 1.2) * cs], [x0, y0] = at(plan.from), [x1, y1] = at(plan.to);
-      await page.mouse.move(x0, y0); await page.mouse.down();
-      for (let k = 1; k <= 10; k++) await page.mouse.move(x0 + (x1 - x0) * k / 10, y0 + (y1 - y0) * k / 10);
+      // drag the finger along the jelly's route, square by square
+      const cs = box.width / (plan.w + 1.4), at = ([r, c]) => [box.x + (c + 1.2) * cs, box.y + (r + 1.2) * cs];
+      await page.mouse.move(...at(plan.path[0])); await page.mouse.down();
+      for (let k = 1; k < plan.path.length; k++) { const [xa, ya] = at(plan.path[k - 1]), [xb, yb] = at(plan.path[k]); for (let j = 1; j <= 4; j++) await page.mouse.move(xa + (xb - xa) * j / 4, ya + (yb - ya) * j / 4); }
+      const [xe, ye] = at(plan.path[plan.path.length - 1]); await page.mouse.move(xe + 2, ye + 2);
       await page.mouse.up(); await page.waitForTimeout(250);
     } }
   ok(await page.waitForSelector('.panel h2:has-text("Level 1 cleared")', { timeout: 4000 }).then(() => true, () => false), 'jelly: dragging every jelly out through its gate clears level 1');

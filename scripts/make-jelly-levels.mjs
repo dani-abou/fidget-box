@@ -8,7 +8,7 @@
 // only numbers that order satisfies, and every level is re-solved forwards with
 // the game's own rules (src/games/jelly/logic.js) before it's kept.
 import { writeFileSync } from 'node:fs';
-import { makeState, reachable, occupancy, fitsGate, passGate, locked, won, DIRS, solvable } from '../src/games/jelly/logic.js';
+import { makeState, reachable, occupancy, fitsGate, passGate, locked, won, DIRS, solvable, shufflesToSolve, explore } from '../src/games/jelly/logic.js';
 
 const OUT = new URL('../src/data/jelly-levels.json', import.meta.url);
 let seed = 424242;
@@ -148,15 +148,64 @@ function build(n) {
   return L;
 }
 
+// ---------- packed levels: the board tiled full, then one jelly's worth of gap (or one
+// jelly already at its own gate). The full solver must find a way, and it must take shuffling.
+function buildPacked(n) {
+  const w = n < 20 ? 4 + (n % 8 === 0 ? 1 : 0) : n < 40 ? 5 : 6, h = n < 20 ? 5 : n < 40 ? 5 + (n % 8 === 0 ? 1 : 0) : 6;
+  const floor = Array.from({ length: h }, () => '.'.repeat(w)), L = { w, h, floor, gates: [], crates: [] };
+  const grid = Array.from({ length: h }, () => Array(w).fill(-1)), blocks = [];
+  const pool = ['bar2', 'col2', 'bar2', 'col2', 'l3a', 'l3b', 'l3c', 'l3d', 'bar3', 'col3', 'sq', 'dot', ...(n > 30 ? ['l4a', 'l4b', 'l4c', 'l4d'] : [])];
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+    if (grid[r][c] !== -1) continue;
+    let placed = false;
+    for (const name of shuffle(pool.slice())) {
+      const cells = SHAPES[name], [ar, ac] = cells[0], r0 = r - ar, c0 = c - ac; // the shape's first cell lands here
+      if (cells.every(([dr, dc]) => { const rr = r0 + dr, cc = c0 + dc; return rr >= 0 && cc >= 0 && rr < h && cc < w && grid[rr][cc] === -1; })) {
+        cells.forEach(([dr, dc]) => { grid[r0 + dr][c0 + dc] = blocks.length; }); blocks.push({ cells, r: r0, c: c0 }); placed = true; break;
+      }
+    }
+    if (!placed) { grid[r][c] = blocks.length; blocks.push({ cells: SHAPES.dot, r, c }); }
+  }
+  const nColors = Math.min(5, 3 + Math.floor(n / 20)), colors = shuffle(COLORS.slice()).slice(0, nColors);
+  const taken = new Set();
+  for (const color of colors) for (let t = 0; t < 40; t++) { // one gate per colour, 2-3 wide
+    const side = pick(Object.keys(DIRS)), vert = side === 'up' || side === 'down', max = vert ? w : h, len = Math.min(max - 1, pick([2, 2, 3])), from = ri(0, max - len);
+    let ok = true; for (let k = -1; k <= len; k++) if (taken.has(side + (from + k))) ok = false;
+    if (!ok) continue;
+    for (let k = -1; k <= len; k++) taken.add(side + (from + k));
+    L.gates.push({ side, line: side === 'up' || side === 'left' ? 0 : vert ? h - 1 : w - 1, from, len, color }); break;
+  }
+  if (L.gates.length < nColors) return null;
+  // colour each jelly with a colour whose gate it fits through
+  for (const b of blocks) {
+    const bw = Math.max(...b.cells.map(c => c[1])) + 1, bh = Math.max(...b.cells.map(c => c[0])) + 1;
+    const ok = L.gates.filter(g => (g.side === 'up' || g.side === 'down' ? bw : bh) <= g.len);
+    if (!ok.length) return null;
+    b.color = pick(ok).color;
+  }
+  const gap = rnd() < .6; // a gap to shuffle into, or a full board with one jelly at its own gate
+  if (gap) { const small = blocks.filter(b => b.cells.length <= 2); if (!small.length) return null; blocks.splice(blocks.indexOf(pick(small)), 1); }
+  L.blocks = blocks;
+  const S = makeState(L), ready = S.blocks.filter((b, i) => explore(S, i).exit).length;
+  if (gap ? ready > 0 : ready !== 1) return null; // gap boards start with nothing able to leave; full ones with exactly one
+  const need = shufflesToSolve(L, 40000);
+  if (need === null || need < 0 || need < Math.min(6, 1 + Math.floor(n / 10)) || need > 4 + Math.floor(n / 4)) return null; // harder as you go
+  L.packed = true; L.shuffles = need;
+  L.time = Math.round((30 + blocks.length * 8 + need * 6) / 5) * 5;
+  return L;
+}
+TIPS[4] = 'Packed in! Slide jellies into the gap to make room, one move at a time.';
+
 const levels = [];
 for (let n = 1; n <= 60; n++) {
   let L = null;
-  for (let t = 0; t < 400 && !L; t++) { const c = build(n); if (c && solvable(c)) L = c; }
+  const packed = n >= 4 && n % 4 === 0; // every 4th level is a packed board
+  for (let t = 0; t < (packed ? 3000 : 400) && !L; t++) { const c = packed ? buildPacked(n) : build(n); if (c && (packed || solvable(c))) L = c; }
   if (!L) throw new Error('no level ' + n);
   if (TIPS[n]) L.tip = TIPS[n];
   levels.push(L);
   const f = [L.blocks.some(b => b.axis) && 'arrows', L.blocks.some(b => b.ice) && 'ice', L.gates.some(g => g.ice) && 'icy gate', L.blocks.some(b => b.inner) && 'double', L.blocks.some(b => b.lock) && 'chain', L.crates.length && 'crate'].filter(Boolean);
-  console.log(`${String(n).padStart(2)}  ${L.w}x${L.h}  ${String(L.blocks.length).padStart(2)} jellies  ${L.gates.length} gates  ${L.time}s  ${f.join(' ')}`);
+  console.log(`${String(n).padStart(2)}  ${L.w}x${L.h}  ${String(L.blocks.length).padStart(2)} jellies  ${L.gates.length} gates  ${L.time}s  ${L.packed ? `PACKED, ${L.shuffles} shuffles` : f.join(' ')}`);
 }
 writeFileSync(OUT, JSON.stringify(levels));
 console.log('wrote', OUT.pathname);
