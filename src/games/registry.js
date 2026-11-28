@@ -6,6 +6,7 @@ export default [
   'hotel',
   'slide',
   'pen',
+  'jelly',
   'spades',
   'words',
 ];

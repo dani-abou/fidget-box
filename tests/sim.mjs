@@ -3,6 +3,7 @@
 //  - Letter Trail: boards generate quickly and every level's target is reachable.
 //  - Slide Free: every level is solvable in exactly its stated minimum.
 import { readFileSync } from 'node:fs';
+import * as JL from '../src/games/jelly/logic.js';
 import { parse as penParse, reach as penReach, starsFor as penStars } from '../src/games/pen/logic.js';
 import assert from 'node:assert/strict';
 import { legal, trickWinner, scoreHand, aiBid, aiPlay, estimate } from '../src/games/spades.js';
@@ -197,6 +198,34 @@ check('free farm keeps growing: endless upgrades, ribbons, Orchard and Bee Garde
   const before = automatedRate(new Set([...all].filter(id => !['orchard', 'bees'].includes(id) && !FX.UNLOCKS.find(u => u.id === id && FX.UNLOCKS.indexOf(u) >= FX.UNLOCKS.findIndex(x => x.id === 'orchard')))));
   assert.ok(automatedRate(all) > before, 'the new areas earn more on their own');
   assert.ok(automatedRate(all, { prices: 5 }) > automatedRate(all) * 1.4, 'price upgrades raise offline earnings');
+});
+
+check('jelly gates: gates, fit, ice, chains, layers, crates, one-way', () => {
+  const L = { w: 4, h: 3, floor: ['....', '....', '....'], crates: [],
+    gates: [{ side: 'right', line: 3, from: 0, len: 1, color: 'red' }, { side: 'up', line: 0, from: 0, len: 2, color: 'blue' }],
+    blocks: [{ cells: [[0, 0]], r: 0, c: 0, color: 'red' }, { cells: [[0, 0], [0, 1]], r: 2, c: 0, color: 'blue', ice: 1 }] };
+  const S = JL.makeState(L);
+  assert.ok(!JL.gateFor(S, 0), 'not against a gate yet');
+  S.blocks[0].c = 3; assert.equal(JL.gateFor(S, 0).color, 'red', 'touching its gate');
+  assert.ok(JL.locked(S, S.blocks[1]), 'frozen until one jelly has left');
+  JL.passGate(S, 0); assert.ok(!JL.locked(S, S.blocks[1]), 'thawed');
+  S.blocks[1].r = 0; assert.ok(JL.gateFor(S, 1), 'a 2-wide jelly fits a 2-wide gate');
+  L.gates[1].len = 1; assert.ok(!JL.gateFor(S, 1), 'but not a 1-wide one');
+  const D = JL.makeState({ ...L, gates: [{ side: 'right', line: 3, from: 0, len: 1, color: 'red' }], blocks: [{ cells: [[0, 0]], r: 0, c: 3, color: 'red', inner: 'blue' }] });
+  assert.equal(JL.passGate(D, 0), 'peeled'); assert.equal(D.blocks[0].color, 'blue'); assert.ok(!D.blocks[0].gone, 'a double jelly loses its outside first');
+  const H = JL.makeState({ ...L, gates: [], blocks: [{ cells: [[0, 0]], r: 1, c: 1, color: 'red', axis: 'h' }] });
+  assert.ok([...JL.reachable(H, 0).keys()].every(k => Math.floor(k / 4) === 1), 'a one-way jelly stays in its row');
+  const C = JL.makeState({ ...L, gates: [], crates: [{ cells: [[1, 2]], n: 1 }], blocks: [{ cells: [[0, 0]], r: 1, c: 0, color: 'red' }, { cells: [[0, 0]], r: 0, c: 0, color: 'blue', key: 'k' }, { cells: [[0, 0]], r: 2, c: 0, color: 'red', lock: 'k' }] });
+  assert.ok(!JL.reachable(C, 0).has(1 * 4 + 2), 'a crate is in the way');
+  assert.ok(JL.locked(C, C.blocks[2]), 'chained while its key is on the board');
+  C.blocks[1].gone = true; C.out = 1;
+  assert.ok(!JL.locked(C, C.blocks[2]) && JL.reachable(C, 0).has(1 * 4 + 2), 'key gone: chain off; one out: crate gone');
+});
+
+check('jelly gates levels: 60, every one solvable with the game rules', () => {
+  const lv = JSON.parse(readFileSync(new URL('../src/data/jelly-levels.json', import.meta.url)));
+  assert.equal(lv.length, 60);
+  lv.forEach((L, k) => assert.ok(JL.solvable(L, 50000), `level ${k + 1} is solvable`));
 });
 
 console.log(fails ? `\n${fails} failed` : '\nall logic checks passed');

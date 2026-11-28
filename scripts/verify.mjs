@@ -83,7 +83,7 @@ try {
   // ---- 2. offline ----
   await ctx.setOffline(true);
   await page.reload();
-  ok(await page.waitForFunction(() => document.querySelectorAll('.tile').length === 7, null, { timeout: 5000 }).then(() => true, () => false), 'offline reload: home screen with 7 games');
+  ok(await page.waitForFunction(() => document.querySelectorAll('.tile').length === 8, null, { timeout: 5000 }).then(() => true, () => false), 'offline reload: home screen with 8 games');
   ok(await page.evaluate(() => document.getElementById('home').getBoundingClientRect().height > innerHeight * .8), 'home screen fills the height (hidden play area takes no space)');
   ok(await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('600 20px Fredoka'); }), 'offline reload: Fredoka font loaded from cache');
   const cold = watch(await ctx.newPage());
@@ -116,6 +116,28 @@ try {
   await page.waitForFunction(() => document.querySelector('.fm')?._dbg && !document.querySelector('.fm')._dbg.on('carrotB'), null, { timeout: 5000 });
   ok(await page.evaluate(() => JSON.parse(localStorage.getItem('fb_save_farm-fair')).ribbons === 2 && document.querySelector('.fm')._dbg.coins === 100), 'free farm: the County Fair gives ribbons and a fresh farm with a head start');
   await page.evaluate(() => { localStorage.removeItem('fb_save_farm-fair'); localStorage.removeItem('fb_save_farm-free'); });
+  await page.click('#back');
+
+  // --- Jelly Gates: drag each jelly of level 1 to a gate it fits, with real pointer drags ---
+  await page.click('.tile[data-go="jelly"]'); await page.waitForFunction(() => [...document.querySelectorAll('#play *')].find(e => e._jelly)?._jelly.S, null, { timeout: 5000 });
+  { const box = await page.locator('.jg-board').boundingBox();
+    for (let round = 0; round < 8; round++) {
+      const plan = await page.evaluate(async () => {
+        const J = [...document.querySelectorAll('#play *')].find(e => e._jelly)._jelly, S = J.S, L = J.L, lg = await import('./games/jelly/logic.js');
+        for (let i = 0; i < S.blocks.length; i++) { const b = S.blocks[i]; if (b.gone || lg.locked(S, b)) continue;
+          const r0 = b.r, c0 = b.c;
+          for (const k of lg.reachable(S, i).keys()) { b.r = Math.floor(k / L.w); b.c = k % L.w; const ok = lg.gateFor(S, i); b.r = r0; b.c = c0;
+            if (ok) return { from: [r0 + b.cells[0][0], c0 + b.cells[0][1]], to: [Math.floor(k / L.w) + b.cells[0][0], k % L.w + b.cells[0][1]], w: L.w }; } }
+        return null; });
+      if (!plan) break;
+      const cs = box.width / (plan.w + 1.4), at = ([r, c]) => [box.x + (c + 1.2) * cs, box.y + (r + 1.2) * cs], [x0, y0] = at(plan.from), [x1, y1] = at(plan.to);
+      await page.mouse.move(x0, y0); await page.mouse.down();
+      for (let k = 1; k <= 10; k++) await page.mouse.move(x0 + (x1 - x0) * k / 10, y0 + (y1 - y0) * k / 10);
+      await page.mouse.up(); await page.waitForTimeout(250);
+    } }
+  ok(await page.waitForSelector('.panel h2:has-text("Level 1 cleared")', { timeout: 4000 }).then(() => true, () => false), 'jelly: dragging every jelly out through its gate clears level 1');
+  await page.click('.panel .btn.primary');
+  ok(/Lv\s*2(?!\d)/.test(await page.textContent('#stage .stat')), 'jelly: next level loads');
   await page.click('#back');
 
   // --- Goat Pen: tap fences into the par pen, pen it, three stars ---

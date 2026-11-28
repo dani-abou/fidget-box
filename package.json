@@ -17,6 +17,7 @@
     "levels": "node scripts/make-slide-levels.mjs",
     "words": "node scripts/make-words.mjs",
     "farm:pace": "node scripts/farm-pace.mjs",
-    "pen:levels": "node scripts/make-pen-levels.mjs"
+    "pen:levels": "node scripts/make-pen-levels.mjs",
+    "jelly:levels": "node scripts/make-jelly-levels.mjs"
   }
 }
