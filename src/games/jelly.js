@@ -40,7 +40,8 @@ export default {
   init(el) {
     el.innerHTML = `<div class="gbar"><span class="stat"></span><button class="ibtn undo" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="ibtn restart" aria-label="Restart level"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-3-6.2"/><path d="M20 3v5h-5"/></svg></button><button class="ibtn lvls" aria-label="Levels"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg></button></div>
       <div class="jg-wrap"><canvas class="jg-board"></canvas><p class="jg-tip"></p><div class="jg-boosts">${Object.entries(BOOST).map(([k, b]) => `<button class="jg-boost" data-b="${k}" aria-label="${b.label}">${b.icon}<b>${b.cost}</b></button>`).join('')}</div></div>`;
-    const stat = el.querySelector('.stat'), wrap = el.querySelector('.jg-wrap'), cv = el.querySelector('canvas'), g = cv.getContext('2d');
+    const stat = el.querySelector('.stat'), wrap = el.querySelector('.jg-wrap'), cv = el.querySelector('canvas'), main = cv.getContext('2d');
+    let g = main; // drawing goes here; swapped to an offscreen canvas while caching a picture
     const tipEl = el.querySelector('.jg-tip'), undoBtn = el.querySelector('.undo');
     const prog = progress('jelly'), bank = loadSave('jelly') || { coins: 150 };
     let LEVELS = [], n = 1, L = null, S = null, hist = [], cs = 40, ox = 0, oy = 0, dpr = 1, dead = false, raf = 0, last = performance.now();
@@ -60,7 +61,7 @@ export default {
       hist = []; timeLeft = L.time; frozenFor = 0; phase = 'play'; drag = null; armed = null; fx = [];
       view = S.blocks.map(b => ({ r: b.r, c: b.c, path: [], out: 0, pop: 0 }));
       tipEl.textContent = L.tip || '';
-      layout(); hud();
+      layout(); hud(); needDraw = true;
     }
     function layout() {
       if (!L) return;
@@ -97,7 +98,7 @@ export default {
       const b = S.blocks[i], cells = absCells(b), cr = cells.reduce((a, [r]) => a + r, 0) / cells.length, cc = cells.reduce((a, [, c]) => a + c, 0) / cells.length;
       for (let k = 0; k < 14; k++) fx.push({ x: cc + .5, y: cr + .5, vx: (Math.random() - .5) * 6, vy: (Math.random() - .5) * 6 - 2, t: 0, color });
     }
-    const cellAt = e => { const b = cv.getBoundingClientRect(); return [(e.clientY - b.top - oy) / cs, (e.clientX - b.left - ox) / cs]; };
+    const cellAt = (e, b = drag?.rect || cv.getBoundingClientRect()) => [(e.clientY - b.top - oy) / cs, (e.clientX - b.left - ox) / cs];
     const blockAt = (r, c) => { // the jelly under the finger, or the nearest one within ~3/4 of a square (fast swipes start sloppy)
       let hit = S.blocks.findIndex(b => !b.gone && absCells(b).some(([rr, cc]) => rr === Math.floor(r) && cc === Math.floor(c)));
       if (hit >= 0) return hit;
@@ -120,7 +121,7 @@ export default {
       }
       cv.setPointerCapture(e.pointerId);
       hist.push(snapshot()); if (hist.length > 60) hist.shift();
-      drag = { i, r0: b.r, c0: b.c, pr: r, pc: c, fr: b.r, fc: b.c, occ: occupancy(S, i), lastCell: b.r * 100 + b.c, trail: [[performance.now(), r, c]] };
+      drag = { i, r0: b.r, c0: b.c, pr: r, pc: c, fr: b.r, fc: b.c, occ: occupancy(S, i), lastCell: b.r * 100 + b.c, trail: [[performance.now(), r, c]], rect: cv.getBoundingClientRect() };
       click(500, .02, .1, 'sine');
     });
     // Smooth dragging: the jelly follows your finger in any direction (diagonals too) in small
@@ -287,7 +288,7 @@ export default {
       g.save(); const cx = x0 + (cc + .5) * cs, cy = y0 + (cr + .5) * cs;
       g.translate(cx, cy); g.scale(pop, pop); g.translate(-cx, -cy);
       if (v.exit) g.globalAlpha = Math.max(0, 1 - v.out);
-      const base = HUE[b.color], wob = drag && S.blocks[drag.i] === b ? Math.sin(t * 20) * .6 : 0;
+      const base = HUE[b.color], wob = 0;
       g.fillStyle = 'rgba(0,0,0,.28)'; roundCells(rel, cs * .07, cs * .26, x0, y0 + cs * .07); g.fill();
       roundCells(rel, cs * .06 - wob, cs * .26, x0, y0); g.fillStyle = base; g.fill(); g.lineWidth = Math.max(2, cs * .06); g.strokeStyle = INK; g.stroke();
       if (b.inner) { roundCells(rel, cs * .24, cs * .16, x0, y0); g.fillStyle = HUE[b.inner]; g.fill(); g.lineWidth = Math.max(1.5, cs * .04); g.stroke(); }
@@ -344,9 +345,9 @@ export default {
       g.font = `700 ${cs * .42}px Fredoka, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.lineWidth = Math.max(3, cs * .09); g.strokeStyle = '#fff'; g.strokeText(v, x, y); g.fillStyle = color; g.fillText(v, x, y);
     }
-    function draw(t) {
+    function drawBoard() { // frame, floor, walls, gates, crates: drawn into the cached board layer
       const W = L.w, H = L.h;
-      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
       // frame
       g.fillStyle = '#2A1F5C'; g.strokeStyle = INK; g.lineWidth = 3;
       g.beginPath(); g.roundRect(ox - cs * .55, oy - cs * .55, W * cs + cs * 1.1, H * cs + cs * 1.1, cs * .45); g.fill(); g.stroke();
@@ -379,15 +380,46 @@ export default {
         g.beginPath(); g.roundRect(x + w / 2 - cs * .32, y + h / 2 - cs * .24, cs * .64, cs * .48, cs * .1); g.fillStyle = '#7A2E2E'; g.fill(); g.lineWidth = 2; g.strokeStyle = '#FFD23F'; g.stroke();
         g.font = `700 ${cs * .34}px Fredoka, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(cr.n - S.out, x + w / 2, y + h / 2 + 1);
       }
-      // jellies (the one you hold on top)
+    }
+    // ---- cached pictures: the board (frame, floor, gates, crates) and each jelly are drawn once
+    // and stamped every frame, so a frame is a handful of image copies, not hundreds of paths ----
+    const sprites = new Map(); let boardCv = null, boardKey = '', needDraw = true;
+    const offscreen = (w, h) => { const c = document.createElement('canvas'); c.width = Math.ceil(w * dpr); c.height = Math.ceil(h * dpr); return c; };
+    function boardLayer() {
+      const key = [n, cs, dpr, cv.width, S.out, L.gates.map(x => x.ice || 0).join(), (L.crates || []).map(x => x.n).join()].join('|');
+      if (key !== boardKey) { boardKey = key; boardCv = offscreen(cv.width / dpr, cv.height / dpr); g = boardCv.getContext('2d'); drawBoard(); g = main; }
+      return boardCv;
+    }
+    function sprite(b) {
+      const lockOn = b.lock && S.blocks.some(k => k.key === b.lock && !k.gone), ice = b.ice && S.out < b.ice ? b.ice - S.out : 0;
+      const key = [cs, dpr, JSON.stringify(b.cells), b.color, b.inner || '', b.axis || '', b.key || '', lockOn ? 1 : 0, ice].join('|');
+      let sp = sprites.get(key); if (sp) return sp;
+      const rows = Math.max(...b.cells.map(c => c[0])) + 1, cols = Math.max(...b.cells.map(c => c[1])) + 1, pad = .25;
+      sp = offscreen((cols + pad * 2) * cs, (rows + pad * 2) * cs); sp.pad = pad * cs; sp.w = sp.width / dpr; sp.h = sp.height / dpr;
+      const keep = [ox, oy]; ox = oy = pad * cs; g = sp.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      jelly(b, { r: 0, c: 0, pop: 0, out: 0 }, 0); g = main; [ox, oy] = keep;
+      if (sprites.size > 400) sprites.clear();
+      sprites.set(key, sp); return sp;
+    }
+    function draw(t) {
+      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
+      g.drawImage(boardLayer(), 0, 0, cv.width / dpr, cv.height / dpr);
+      // jellies (the one you hold on top, lifted a touch)
       const order = S.blocks.map((b, i) => i).sort((a, b) => (drag?.i === a) - (drag?.i === b));
-      for (const i of order) { const b = S.blocks[i], v = view[i]; if (b.gone && (!v.exit || v.out >= 1)) continue; jelly(b, v, t); }
+      for (const i of order) {
+        const b = S.blocks[i], v = view[i]; if (b.gone && (!v.exit || v.out >= 1)) continue;
+        const sp = sprite(b), x = ox + v.c * cs - sp.pad, y = oy + v.r * cs - sp.pad;
+        const sc = (v.pop ? 1 + Math.sin(v.pop * Math.PI) * .08 : 1) * (drag?.i === i ? 1.05 : 1);
+        g.globalAlpha = v.exit ? Math.max(0, 1 - v.out) : 1;
+        if (sc === 1) g.drawImage(sp, x, y, sp.w, sp.h);
+        else { const cx = x + sp.w / 2, cy = y + sp.h / 2; g.drawImage(sp, cx - sp.w * sc / 2, cy - sp.h * sc / 2, sp.w * sc, sp.h * sc); }
+      }
+      g.globalAlpha = 1;
       // hammer/rocket targeting hint
-      if (armed) { g.strokeStyle = '#FFD25A'; g.lineWidth = 3; g.setLineDash([8, 6]); g.lineDashOffset = -t * 30; g.beginPath(); g.roundRect(ox - 2, oy - 2, W * cs + 4, H * cs + 4, 8); g.stroke(); g.setLineDash([]); }
+      if (armed) { g.strokeStyle = '#FFD25A'; g.lineWidth = 3; g.setLineDash([8, 6]); g.lineDashOffset = -t * 30; g.beginPath(); g.roundRect(ox - 2, oy - 2, L.w * cs + 4, L.h * cs + 4, 8); g.stroke(); g.setLineDash([]); }
       for (const p of fx) { g.globalAlpha = Math.max(0, 1 - p.t / .7); g.fillStyle = p.color; g.beginPath(); g.arc(ox + p.x * cs, oy + p.y * cs, cs * .09, 0, 7); g.fill(); }
       g.globalAlpha = 1;
     }
-
     function frame(now) {
       const dt = Math.min(.05, (now - last) / 1000); last = now; const t = now / 1000;
       if (L) {
@@ -406,12 +438,16 @@ export default {
         });
         for (const p of fx) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 9 * dt; }
         fx = fx.filter(p => p.t < .7);
-        draw(t);
+        // only paint when something moved or changed: idle frames cost nothing
+        const busy = drag || armed || fx.length || view.some((v, i) => v.path.length || v.pop || (v.exit && v.out < 1) || (!v.exit && (v.r !== S.blocks[i].r || v.c !== S.blocks[i].c)));
+        if (busy || needDraw) { draw(t); needDraw = false; }
       }
       raf = requestAnimationFrame(frame);
     }
 
-    const ro = new ResizeObserver(layout); ro.observe(wrap);
+    for (const ev of ['pointerdown', 'pointerup', 'pointercancel']) cv.addEventListener(ev, () => { needDraw = true; });
+    el.addEventListener('click', () => { needDraw = true; }); // buttons: undo, restart, boosters, panels
+    const ro = new ResizeObserver(() => { layout(); needDraw = true; }); ro.observe(wrap);
     fetch(new URL('../data/jelly-levels.json', import.meta.url)).then(r => r.json()).then(l => { if (dead) return; LEVELS = l; start(prog.last); raf = requestAnimationFrame(frame); });
     el._jelly = { get S() { return S; }, get L() { return L; }, moveTo: (i, r, c) => moveTo(i, r, c), reachable: i => reachable(S, i), start, get phase() { return phase; } }; // for the automated checks
     return () => { dead = true; cancelAnimationFrame(raf); ro.disconnect(); };
