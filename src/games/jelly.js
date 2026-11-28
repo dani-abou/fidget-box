@@ -98,7 +98,13 @@ export default {
       for (let k = 0; k < 14; k++) fx.push({ x: cc + .5, y: cr + .5, vx: (Math.random() - .5) * 6, vy: (Math.random() - .5) * 6 - 2, t: 0, color });
     }
     const cellAt = e => { const b = cv.getBoundingClientRect(); return [(e.clientY - b.top - oy) / cs, (e.clientX - b.left - ox) / cs]; };
-    const blockAt = (r, c) => S.blocks.findIndex(b => !b.gone && absCells(b).some(([rr, cc]) => rr === Math.floor(r) && cc === Math.floor(c)));
+    const blockAt = (r, c) => { // the jelly under the finger, or the nearest one within ~3/4 of a square (fast swipes start sloppy)
+      let hit = S.blocks.findIndex(b => !b.gone && absCells(b).some(([rr, cc]) => rr === Math.floor(r) && cc === Math.floor(c)));
+      if (hit >= 0) return hit;
+      let bd = .75;
+      S.blocks.forEach((b, i) => { if (!b.gone) for (const [rr, cc] of absCells(b)) { const d = Math.max(Math.abs(r - rr - .5), Math.abs(c - cc - .5)) - .5; if (d < bd) { bd = d; hit = i; } } });
+      return hit;
+    };
 
     cv.addEventListener('pointerdown', e => {
       if (!S || phase !== 'play') return; ac();
@@ -114,7 +120,7 @@ export default {
       }
       cv.setPointerCapture(e.pointerId);
       hist.push(snapshot()); if (hist.length > 60) hist.shift();
-      drag = { i, r0: b.r, c0: b.c, pr: r, pc: c, fr: b.r, fc: b.c, occ: occupancy(S, i), lastCell: b.r * 100 + b.c };
+      drag = { i, r0: b.r, c0: b.c, pr: r, pc: c, fr: b.r, fc: b.c, occ: occupancy(S, i), lastCell: b.r * 100 + b.c, trail: [[performance.now(), r, c]] };
       click(500, .02, .1, 'sine');
     });
     // Smooth dragging: the jelly follows your finger in any direction (diagonals too) in small
@@ -151,14 +157,49 @@ export default {
         }
       }
     }
+    const SLACK = .2; // how far the finger may get ahead of a blocked jelly before it drags the anchor along
     cv.addEventListener('pointermove', e => {
       if (!drag || phase !== 'play') return;
-      const [r, c] = cellAt(e); glide(drag.r0 + r - drag.pr, drag.c0 + c - drag.pc);
+      // every point the finger passed this frame, so fast swipes round corners as you drew them
+      for (const ev of e.getCoalescedEvents?.() || [e]) {
+        if (!drag) break;
+        const [r, c] = cellAt(ev), tr = drag.r0 + r - drag.pr, tc = drag.c0 + c - drag.pc;
+        glide(tr, tc);
+        if (!drag) break;
+        // no dead zone: pushing into a wall doesn't bank distance you'd have to win back to reverse
+        const er = tr - drag.fr, ec = tc - drag.fc;
+        if (Math.abs(er) > SLACK) drag.pr += er - Math.sign(er) * SLACK;
+        if (Math.abs(ec) > SLACK) drag.pc += ec - Math.sign(ec) * SLACK;
+        drag.trail.push([ev.timeStamp || performance.now(), r, c]); if (drag.trail.length > 12) drag.trail.shift();
+      }
     });
+    // A flick: let go while the finger is still moving fast and the jelly keeps sliding that way
+    // until it hits something (or leaves through its gate).
+    function flick(i) {
+      const d = drag, now = d.trail[d.trail.length - 1], old = d.trail.find(p => now[0] - p[0] <= 90) || d.trail[0];
+      if (performance.now() - now[0] > 70) return false; // the finger stopped before lifting: a placement, not a flick
+      const dt = (now[0] - old[0]) / 1000; if (dt <= 0) return false;
+      const vr = (now[1] - old[1]) / dt, vc = (now[2] - old[2]) / dt, b = S.blocks[i];
+      if (Math.hypot(vr, vc) < 9) return false; // cells per second
+      let dr = 0, dc = 0;
+      if (Math.abs(vc) >= Math.abs(vr)) dc = Math.sign(vc); else dr = Math.sign(vr);
+      if ((b.axis === 'h' && dr) || (b.axis === 'v' && dc)) return false;
+      const occ = d.occ, path = [];
+      while (freeAt(S, i, b.r + dr, b.c + dc, occ)) {
+        b.r += dr; b.c += dc; path.push([b.r, b.c]);
+        if (gateFor(S, i)) break;
+      }
+      if (!path.length) return false;
+      view[i].path.push(...path); click(900, .02, .08, 'triangle');
+      return true;
+    }
     const up = () => {
       if (drag) {
-        const b = S.blocks[drag.i]; b.r = Math.round(drag.fr); b.c = Math.round(drag.fc); // the nearest square is always free
-        if (b.r === drag.r0 && b.c === drag.c0 && !gateFor(S, drag.i)) hist.pop(); else checkGate(drag.i); // a tap sends out a jelly already at its gate
+        const b = S.blocks[drag.i];
+        b.r = Math.round(drag.fr); b.c = Math.round(drag.fc); // the nearest square is always free
+        view[drag.i].r = drag.fr; view[drag.i].c = drag.fc;
+        const flung = flick(drag.i);
+        if (!flung && b.r === drag.r0 && b.c === drag.c0 && !gateFor(S, drag.i)) hist.pop(); else checkGate(drag.i); // a tap sends out a jelly already at its gate
       }
       drag = null; hud();
     };
@@ -358,9 +399,9 @@ export default {
         // jellies glide along their paths; leaving ones slide out through the gap
         view.forEach((v, i) => {
           const b = S.blocks[i];
-          if (v.path.length) { const [tr, tc] = v.path[0], d = Math.hypot(tr - v.r, tc - v.c), step = dt * 22; if (d <= step) { v.r = tr; v.c = tc; v.path.shift(); } else { v.r += (tr - v.r) / d * step; v.c += (tc - v.c) / d * step; } }
-          else if (!v.exit && drag?.i !== i) { const k = Math.min(1, dt * 20); v.r += (b.r - v.r) * k; v.c += (b.c - v.c) * k; if (Math.abs(b.r - v.r) + Math.abs(b.c - v.c) < .01) { v.r = b.r; v.c = b.c; } } // settle onto the square
-          if (v.exit && !v.path.length) { const [dr, dc] = DIRS[v.exit]; v.out += dt * 2.5; v.r += dr * dt * 9; v.c += dc * dt * 9; }
+          if (v.path.length) { const [tr, tc] = v.path[0], d = Math.hypot(tr - v.r, tc - v.c), step = dt * 36; if (d <= step) { v.r = tr; v.c = tc; v.path.shift(); } else { v.r += (tr - v.r) / d * step; v.c += (tc - v.c) / d * step; } }
+          else if (!v.exit && drag?.i !== i) { const k = Math.min(1, dt * 32); v.r += (b.r - v.r) * k; v.c += (b.c - v.c) * k; if (Math.abs(b.r - v.r) + Math.abs(b.c - v.c) < .01) { v.r = b.r; v.c = b.c; } } // settle onto the square
+          if (v.exit && !v.path.length) { const [dr, dc] = DIRS[v.exit]; v.out += dt * 4; v.r += dr * dt * 14; v.c += dc * dt * 14; }
           if (v.pop) v.pop = Math.max(0, v.pop - dt * 3);
         });
         for (const p of fx) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 9 * dt; }
