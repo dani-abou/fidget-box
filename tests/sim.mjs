@@ -114,8 +114,9 @@ check('farm levels: every goal is reachable with what the level starts with or c
     const have = new Set([...startIds, ...L.start, ...L.build]);
     for (const id of [...L.start, ...L.build]) assert.ok(unlockIds.has(id), `${tag}: unknown id '${id}'`);
     for (const id of L.build) { const u = FU.find(x => x.id === id); if (u.after) assert.ok(have.has(u.after), `${tag}: '${id}' needs '${u.after}', which this level never has`); }
-    const zoneOk = y => FC.zones.every(z => z.start || have.has(z.id) || y > z.fenceY);
-    for (const id of L.build) assert.ok(zoneOk(FU.find(u => u.id === id).at.y), `${tag}: '${id}' sits behind a fence this level can't open`);
+    const inZone = (p, z) => p.x > z.x && p.x < z.x + z.w && p.y > z.y && p.y < z.y + z.h;
+    const zoneOk = p => FC.zones.every(z => z.start || have.has(z.id) || !inZone(p, z));
+    for (const id of L.build) assert.ok(zoneOk(FU.find(u => u.id === id).at), `${tag}: '${id}' sits behind a fence this level can't open`);
     const makes = p => FC.fields.some(f => f.crop === p && have.has(f.id)) || FC.pens.some(q => q.product === p && have.has(q.id)) || FC.machines.some(m => m.out === p && have.has(m.id) && makes(m.in));
     for (const gl of L.goals) {
       if (gl.sell) { assert.ok(FC.stands.some(st => st.product === gl.sell && have.has(st.id)), `${tag}: no ${gl.sell} stand`); assert.ok(makes(gl.sell), `${tag}: nothing makes ${gl.sell}`); }

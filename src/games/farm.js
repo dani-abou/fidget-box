@@ -12,7 +12,9 @@ import { CONFIG as C, UNLOCKS, layoutFor, SHOWN_UNLOCKS, LOOKAHEAD, UNLOCK_SECON
 import { createArt, rr, INK } from './farm/art.js';
 
 const START_IDS = new Set([...C.fields, ...C.stands, ...C.zones].filter(e => e.start).map(e => e.id));
-const zoneAt = y => C.zones.find(z => y >= z.top - 1 && (z.fenceY === undefined || y <= z.fenceY + .5)) || C.zones[0];
+const inRect = (p, r, pad = 0) => p.x > r.x - pad && p.x < r.x + r.w + pad && p.y > r.y - pad && p.y < r.y + r.h + pad;
+// the zone a point is in; the market (in no zone) counts as the starting zone
+const zoneAt = (zones, p) => zones.find(z => inRect(p, z)) || zones.find(z => z.start);
 const d2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const easeBack = t => { t = Math.min(1, t); const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
 const up = (state, key) => C.upgrades[key].levels[state.up[key] || 0];
@@ -173,6 +175,12 @@ export function runLevel(el, n, api, mode = 'levels') {
   // ================= state =================
   // levels start fresh from their config; the Free Farm restores its save
   const L = free ? FREE : LEVELS[n - 1], sv = free ? (loadSave('farm-free') || {}) : {};
+  // Free Farm saves from before the cross-shaped map: keep what was built, put the farmer back in
+  // the market, and open the Hillside for anyone who had already built down there
+  if (free && sv.savedAt && sv.map !== 2) {
+    delete sv.player?.x; delete sv.player?.y;
+    if (sv.unlocked?.some(id => ['pumpkin', 'sheep', 'stand_pumpkin', 'stand_wool', 'hand_pumpkin'].includes(id)) && !sv.unlocked.includes('hillside')) sv.unlocked.push('hillside');
+  }
   // this level's dressing: mirrored farm, season and decorations (shadows the module's CONFIG and UNLOCKS)
   const LAY = layoutFor(L), C = LAY.C, UNLOCKS = LAY.unlocks;
   if (!free) api.prog.play(n);
@@ -224,7 +232,12 @@ export function runLevel(el, n, api, mode = 'levels') {
 
   const cap = () => up(S, 'carry');
   const zoneOpen = z => z.start || on(z.id);
-  const topLimit = () => { for (const z of C.zones) if (!zoneOpen(z)) return z.fenceY + .45; return 1.3; };
+  // you can stand anywhere except in a closed zone or the woods (with half a body of clearance)
+  const walkable = (x, y) => { const p = { x, y }, w = C.world;
+    if (x < .45 || x > w.cols - .45 || y < .6 || y > w.rows - .45) return false;
+    for (const b of w.blocked) if (inRect(p, b, .45)) return false;
+    for (const z of C.zones) if (!zoneOpen(z) && inRect(p, z, .45)) return false;
+    return true; };
 
   function spawnHelper(h) {
     if (helpers.some(x => x.id === h.id)) return;
@@ -237,7 +250,7 @@ export function runLevel(el, n, api, mode = 'levels') {
   // ================= saving =================
   // Free Farm saves everything; a level is a short round (only levels, stars and seeds are kept)
   const save = () => { if (free) writeSave('farm-free', {
-    coins: S.coins, unlocked: [...S.unlocked], partial: S.partial, up: S.up, tut: S.tut, earned: S.earned,
+    map: 2, coins: S.coins, unlocked: [...S.unlocked], partial: S.partial, up: S.up, tut: S.tut, earned: S.earned,
     player: { x: +P.x.toFixed(2), y: +P.y.toFixed(2), stack: P.stack.map(x => x.t) },
     piles: Object.fromEntries(pens.map(q => [q.id, q.n])), crates: Object.fromEntries(crates.map(c => [c.id, c.n])),
     stands: Object.fromEntries(stands.map(x => [x.product, x.stock])), machines: Object.fromEntries(machines.map(m => [m.id, { in: m.inN, out: m.outN }])),
@@ -259,7 +272,7 @@ export function runLevel(el, n, api, mode = 'levels') {
   }
 
   // ================= unlocking =================
-  const zoneOfTile = u => zoneAt(u.at.y);
+  const zoneOfTile = u => zoneAt(C.zones, u.at);
   // The next few unbuilt entries in order (a small look-ahead window, so late items never jump the queue),
   // minus any whose zone is closed or whose `after` isn't built yet.
   const visibleTiles = () => TILES.filter(u => buildable.has(u.id) && !S.unlocked.has(u.id)).slice(0, SHOWN_UNLOCKS + LOOKAHEAD).filter(u => zoneOpen(zoneOfTile(u)) && (!u.after || on(u.after))).slice(0, SHOWN_UNLOCKS);
@@ -272,7 +285,7 @@ export function runLevel(el, n, api, mode = 'levels') {
     sChime(big); buzz(big ? 60 : 25); shake = big ? .35 : .15;
     burst(u.at.x, u.at.y, '#FFD23F', 12);
     float(u.at.x, u.at.y - .8, u.label + '!', '#FFFFFF');
-    if (z) { confetti(root, 120); float(7, z.fenceY - 2, 'Welcome to the ' + z.name + '!', '#FFD23F'); }
+    if (z) { confetti(root, 120); float(u.at.x, u.at.y - 1.6, 'Welcome to the ' + z.name + '!', '#FFD23F'); }
     save();
   }
 
@@ -323,10 +336,12 @@ export function runLevel(el, n, api, mode = 'levels') {
     if (P.spd < .02) P.spd = 0;
     P.vx = Math.cos(P.hd) * P.spd; P.vy = Math.sin(P.hd) * P.spd;
     if (Math.abs(P.vx) > .35 * sp) P.look = Math.sign(P.vx); // only face the other way once actually moving that way
-    P.x = Math.max(.45, Math.min(C.world.cols - .45, P.x + P.vx * dt));
-    P.y = Math.max(topLimit(), Math.min(43.3, P.y + P.vy * dt));
+    const nx = P.x + P.vx * dt, ny = P.y + P.vy * dt; // slide along fences and the woods
+    if (walkable(nx, ny)) { P.x = nx; P.y = ny; } else if (walkable(nx, P.y)) P.x = nx; else if (walkable(P.x, ny)) P.y = ny;
     P.walk += Math.hypot(P.vx, P.vy) * dt;
   }
+
+  const pickSpawn = () => C.customers.spawn[Math.floor(Math.random() * C.customers.spawn.length)];
 
   // ================= walking helpers =================
   function walkTo(ch, to, speed, dt) {
@@ -569,7 +584,7 @@ export function runLevel(el, n, api, mode = 'levels') {
           const other = can.filter(p => p !== kinds[0]); if (other.length && Math.random() < .75) kinds.push(other[Math.floor(Math.random() * other.length)]);
           const total = C.vip.items[0] + Math.floor(Math.random() * (C.vip.items[1] - C.vip.items[0] + 1)), want = {};
           for (let i = 0; i < total; i++) { const p = kinds[i % kinds.length]; want[p] = (want[p] || 0) + 1; }
-          orders.vip = { x: C.customers.spawn.x, y: C.customers.spawn.y, look: 1, walk: 0, state: 'in', want, got: {}, coming: {}, wait: C.vip.patience + bonus.patience };
+          const from = pickSpawn(); orders.vip = { from, x: from.x, y: from.y, look: 1, walk: 0, state: 'in', want, got: {}, coming: {}, wait: C.vip.patience + bonus.patience };
           float(C.vip.spot.x, C.vip.spot.y - 1.6, '⭐ Special order!', '#FFD23F'); tone(1319);
         }
       } else if (v.state === 'in') {
@@ -583,8 +598,8 @@ export function runLevel(el, n, api, mode = 'levels') {
           coinsTo(v, 14); float(v.x, v.y - 1.8, `Order filled! +${pay}`, '#FFD23F'); sChime(true); buzz(30); burst(v.x, v.y - 1, '#FFD23F', 14); orders.t = C.vip.every;
         } else if (v.wait <= 0) { frameNo++; v.state = 'out'; v.sad = 1; orders.missed++; float(v.x, v.y - 1.8, 'Too slow 😤', '#FF8A66'); click(220, .2, .2, 'sine'); orders.t = C.vip.every; }
       } else {
-        const to = v.y < C.customers.gate.y - .1 ? C.customers.gate : C.customers.spawn;
-        if (walkTo(v, to, C.customers.speed * 1.2, dt) && to === C.customers.spawn) orders.vip = null;
+        const to = v.y < C.customers.gate.y - .1 ? C.customers.gate : v.from;
+        if (walkTo(v, to, C.customers.speed * 1.2, dt) && to === v.from) orders.vip = null;
       }
     }
     // crows: land on ripe crops; get close and they scatter
@@ -608,7 +623,7 @@ export function runLevel(el, n, api, mode = 'levels') {
             float(c.x, c.y - 1, `A crow ate one! (${S.crowLost}/${gCrows.crows} allowed)`, '#FF8A66'); click(300, .15, .2, 'sawtooth'); shake = .15;
             if (S.crowLost > gCrows.crows) finish(false, `The crows ate ${S.crowLost} crops (${gCrows.crows} allowed).`);
           }
-        } else { c.x = c.fx + c.t * 7 * (c.fx < 7 ? -1 : 1); c.y = c.fy - c.t * 6; if (c.t > 1.2) crows.splice(crows.indexOf(c), 1); }
+        } else { c.x = c.fx + c.t * 7 * (c.fx < C.world.cols / 2 ? -1 : 1); c.y = c.fy - c.t * 6; if (c.t > 1.2) crows.splice(crows.indexOf(c), 1); }
       }
     }
     // inspections: a warning, then every open stall must have enough on it
@@ -625,7 +640,7 @@ export function runLevel(el, n, api, mode = 'levels') {
         const short = stands.filter(st => insp.check?.has(st.id) && st.stock < gInspect.inspect.min);
         insp.next++; insp.warned = false; insp.warning = 0;
         if (short.length) finish(false, `The inspector found only ${short[0].stock} on the ${C.products[short[0].product].name.toLowerCase()} stall (needed ${gInspect.inspect.min}).`);
-        else { insp.passed++; S.coins += C.inspect.reward; S.earned += C.inspect.reward; sChime(true); float(7, 36.4, `Inspection passed! +${C.inspect.reward}`, '#4FE378'); for (const st of stands) if (on(st.id)) burst(st.at.x, st.at.y - 1, '#4FE378', 4); }
+        else { insp.passed++; S.coins += C.inspect.reward; S.earned += C.inspect.reward; sChime(true); float(C.world.start.x, C.standY + .8, `Inspection passed! +${C.inspect.reward}`, '#4FE378'); for (const st of stands) if (on(st.id)) burst(st.at.x, st.at.y - 1, '#4FE378', 4); }
       }
     }
     refreshFocus();
@@ -699,7 +714,7 @@ export function runLevel(el, n, api, mode = 'levels') {
       custT = every * (.7 + Math.random() * .6);
       const stocked = open.filter(s => s.stock > 0), pool = stocked.length && Math.random() < .8 ? stocked : open;
       const s = pool[Math.floor(Math.random() * pool.length)];
-      customers.push({ x: cc.spawn.x + (Math.random() - .5), y: cc.spawn.y, stand: s, want: cc.buyMin + Math.floor(Math.random() * (cc.buyMax - cc.buyMin + 1)), got: [],
+      const from = pickSpawn(); customers.push({ from, x: from.x, y: from.y + (Math.random() - .5) * .6, stand: s, want: cc.buyMin + Math.floor(Math.random() * (cc.buyMax - cc.buyMin + 1)), got: [],
         state: 'in', wait: 0, t: 0, look: 1, walk: 0, shirt: ['#FF9EC4', '#7FC8F8', '#FFD23F', '#9C7BEA', '#7BD96B', '#FF8A4C'][Math.floor(Math.random() * 6)] });
     }
     const queue = customers.filter(c => c.state === 'queue');
@@ -717,7 +732,7 @@ export function runLevel(el, n, api, mode = 'levels') {
         const i = queue.indexOf(c), slot = C.register.queue[Math.min(i, C.register.queue.length - 1)];
         walkTo(c, { x: slot[0], y: slot[1] }, cc.speed, dt);
       } else if (c.state === 'leave') {
-        if (walkTo(c, c.left ? cc.spawn : cc.gate, cc.speed, dt)) { if (c.left) customers.splice(customers.indexOf(c), 1); else c.left = true; }
+        if (walkTo(c, c.left ? c.from : cc.gate, cc.speed, dt)) { if (c.left) customers.splice(customers.indexOf(c), 1); else c.left = true; }
       }
     }
     // checkout: the first customer in line pays when someone works the register
@@ -840,12 +855,12 @@ export function runLevel(el, n, api, mode = 'levels') {
     g.translate(sx, sy);
     // static ground: one drawImage of the visible slice
     // the ground image covers the view; only paint the strips beyond the map edges (saves a full-screen fill)
-    g.fillStyle = '#86CF62';
+    g.fillStyle = LAY.theme.grass[0];
     if (camX < 0) g.fillRect(-20, -20, -camX * T + 20, H + 40);
     const right = (C.world.cols - camX) * T; if (right < W) g.fillRect(right, -20, W - right + 20, H + 40);
     if (shake) g.fillRect(-20, -20, W + 40, 20), g.fillRect(-20, H, W + 40, 20);
-    const gs = T * dpr;
-    g.drawImage(groundCv, camX * gs, camY * gs, W * dpr, H * dpr, 0, 0, W, H);
+    const gs = groundCv.gs;
+    g.drawImage(groundCv, camX * gs, camY * gs, W / T * gs, H / T * gs, 0, 0, W, H);
     // crops
     for (const f of fields) {
       if (!on(f.id) || !onScreen(f.x + f.w / 2, f.y + f.h / 2, f.w + 2)) continue;
@@ -912,6 +927,7 @@ export function runLevel(el, n, api, mode = 'levels') {
     // everyone, back to front
     const people = [];
     for (const c of customers) people.push([c.y, () => {
+      g.globalAlpha = Math.min(1, d2(c, c.from) / .7); // step off / onto the bus
       art.person(g, X(c.x), Y(c.y), { kind: 'customer', shirt: c.shirt, look: c.look, sy: 1 + Math.sin(c.walk * 7) * .03, bob: Math.abs(Math.sin(c.walk * 7)) * T * .04 });
       if (c.got.length) for (let i = 0; i < c.got.length; i++) drawItem(c.got[i], X(c.x) + c.look * T * .28, Y(c.y) - T * (.35 + i * .16), .6);
       if (c.state === 'shop' && c.stand.stock === 0 && c.wait > 2) { g.font = `${T * .35}px sans-serif`; g.textAlign = 'center'; g.fillText('💭', X(c.x), Y(c.y) - T * 1.25); }
@@ -927,6 +943,7 @@ export function runLevel(el, n, api, mode = 'levels') {
     }]);
     const v = orders.vip;
     if (v) people.push([v.y, () => {
+      g.globalAlpha = Math.min(1, d2(v, v.from) / .7);
       art.person(g, X(v.x), Y(v.y), { kind: 'customer', shirt: '#FFD23F', look: v.look, bob: Math.abs(Math.sin((v.walk || 0) * 5.5)) * T * .03 });
       g.font = `${T * .36}px sans-serif`; g.textAlign = 'center'; g.fillText(v.happy ? '😍' : v.sad ? '😤' : '⭐', X(v.x), Y(v.y) - T * 1.18);
       if (v.state === 'wait') { // the order bubble with a patience bar
@@ -952,7 +969,7 @@ export function runLevel(el, n, api, mode = 'levels') {
       g.fillStyle = '#fff'; g.beginPath(); g.arc(s * .19, -s * .11, s * .03, 0, 7); g.fill();
       g.restore();
     }]);
-    people.sort((a, b) => a[0] - b[0]).forEach(p => p[1]());
+    people.sort((a, b) => a[0] - b[0]).forEach(p => { g.globalAlpha = 1; p[1](); }); g.globalAlpha = 1;
     if (checkoutT > 0) ring(X(C.register.counter.x), Y(C.register.counter.y) - T * 1.2, checkoutT, '#4FE378');
     // items in flight
     for (const f of flying) {

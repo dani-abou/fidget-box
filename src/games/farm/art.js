@@ -95,8 +95,10 @@ export function createArt(T, dpr) {
   function ground(isOn, lay = {}) {
     const { cols, rows } = CONFIG.world;
     const LC = lay.C || CONFIG, th = lay.theme || SEASONS.spring;
-    const c = document.createElement('canvas'); c.width = Math.round(cols * T * dpr); c.height = Math.round(rows * T * dpr);
-    const g = c.getContext('2d'); g.scale(dpr, dpr);
+    // the whole farm is one bitmap; keep it under ~14M pixels (iOS refuses canvases past 16.7M), so big tablets get a touch less sharp ground
+    const gd = Math.min(dpr, Math.sqrt(14e6 / (cols * rows * T * T)));
+    const c = document.createElement('canvas'); c.width = Math.round(cols * T * gd); c.height = Math.round(rows * T * gd); c.gs = T * gd;
+    const g = c.getContext('2d'); g.scale(gd, gd);
     const lw = Math.max(1.5, T * .05);
     // grass with soft variation and little flowers
     g.fillStyle = th.grass[0]; g.fillRect(0, 0, cols * T, rows * T);
@@ -106,14 +108,26 @@ export function createArt(T, dpr) {
       if (h > .9) { g.fillStyle = h > .95 ? th.flowers[1] : th.flowers[0]; g.beginPath(); g.arc((x + hash(y, x)) * T, (y + h) * T, T * .05, 0, 7); g.fill(); }
       if (h > .82 && h < .86) { g.strokeStyle = th.tuft; g.lineWidth = lw * .7; g.beginPath(); const gx = (x + .3) * T, gy = (y + .6) * T; g.moveTo(gx, gy); g.lineTo(gx - T * .05, gy - T * .14); g.moveTo(gx, gy); g.lineTo(gx + T * .06, gy - T * .12); g.stroke(); }
     }
-    // dirt path up the middle, plaza, road
-    g.fillStyle = th.path; rr(g, 6 * T, 1 * T, 2 * T, 35 * T, T * .5); g.fill();
+    // the woods beside the Hillside: darker ground under the trees drawn at the end
+    const W = CONFIG.world, M = W.market, R = W.road, mid = M.x + M.w / 2;
+    for (const b of W.blocked) { g.fillStyle = 'rgba(20,60,30,.22)'; g.fillRect(b.x * T, b.y * T, b.w * T, b.h * T); }
+    // dirt paths out of the market in all four directions, then the plaza and the road
+    g.fillStyle = th.path;
+    rr(g, (mid - 1) * T, .4 * T, 2 * T, (M.y + 1) * T, T * .5); g.fill();                 // north
+    rr(g, (mid - 1) * T, (R.y + R.h - .5) * T, 2 * T, (rows - R.y - R.h) * T, T * .5); g.fill(); // south
+    rr(g, .4 * T, 13.4 * T, (M.x + 1) * T, 1.7 * T, T * .5); g.fill();                     // west
+    rr(g, (M.x + M.w - 1) * T, 13.4 * T, (cols - M.x - M.w + .6) * T, 1.7 * T, T * .5); g.fill(); // east
     decorate(g, lay, th, lw);
-    g.fillStyle = '#EAD9B8'; rr(g, .3 * T, 34.6 * T, 13.4 * T, 8.6 * T, T * .5); g.fill();
+    g.fillStyle = '#EAD9B8'; rr(g, (M.x + .3) * T, M.y * T, (M.w - .6) * T, (R.y - M.y - .4) * T, T * .5); g.fill();
     g.strokeStyle = 'rgba(160,130,90,.18)'; g.lineWidth = 1;
-    for (let y = 35; y < 43; y++) for (let x = 1; x < 14; x++) if ((x + y) % 2) g.strokeRect(x * T, y * T, T, T);
-    g.fillStyle = '#7A7598'; g.fillRect(0, 43.6 * T, cols * T, 3.4 * T);
-    g.fillStyle = '#FFE58A'; for (let x = 0; x < cols; x += 2) g.fillRect((x + .4) * T, 45.2 * T, T * 1.1, T * .14);
+    for (let y = Math.ceil(M.y); y < R.y - .5; y++) for (let x = M.x + 1; x < M.x + M.w; x++) if ((x + y) % 2) g.strokeRect(x * T, y * T, T, T);
+    g.fillStyle = '#7A7598'; g.fillRect(0, R.y * T, cols * T, R.h * T);
+    g.fillStyle = '#FFE58A'; for (let x = 0; x < cols; x += 2) g.fillRect((x + .4) * T, (R.y + R.h / 2 - .07) * T, T * 1.1, T * .14);
+    // the bus stop customers arrive at
+    { const b = CONFIG.customers.busStop, x = b.x * T, y = b.y * T;
+      rr(g, x - T * .05, y - T * 1.3, T * .1, T * 1.3, T * .03); blob(g, '#6B6880', lw * .7);
+      rr(g, x - T * .32, y - T * 1.62, T * .64, T * .42, T * .1); blob(g, '#3FA7F5', lw * .8);
+      g.fillStyle = '#fff'; g.font = `700 ${T * .26}px Fredoka, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('BUS', x, y - T * 1.4); g.textBaseline = 'alphabetic'; }
     // fields
     for (const f of LC.fields) {
       if (!isOn(f.id)) continue;
@@ -128,17 +142,28 @@ export function createArt(T, dpr) {
       for (let i = 0; i < 18; i++) { const sx = (p.x + .3 + hash(i, p.x) * (p.w - .6)) * T, sy = (p.y + .3 + hash(p.y, i) * (p.h - .6)) * T; g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx + T * .18, sy - T * .06); g.stroke(); }
       fenceRect(g, p.x, p.y, p.w, p.h, lw);
     }
-    // zone fences and the dimmed, locked land beyond them
-    for (const z of CONFIG.zones) {
+    // closed zones: dimmed land behind a fence on every side that faces the farm
+    for (const z of LC.zones || CONFIG.zones) {
       if (z.start || isOn(z.id)) continue;
-      const bottom = z.fenceY, top = z.top;
-      g.fillStyle = 'rgba(40,30,70,.38)'; g.fillRect(0, (top - 1) * T, cols * T, (bottom - top + 1) * T);
-      fenceLine(g, 0, bottom, cols, lw);
+      g.fillStyle = 'rgba(40,30,70,.38)'; g.fillRect(z.x * T, z.y * T, z.w * T, z.h * T);
+      if (z.y > 0) fenceLine(g, z.x, z.y, z.w, lw);
+      if (z.y + z.h < rows) fenceLine(g, z.x, z.y + z.h, z.w, lw);
+      const fh = z.y < R.y && z.y + z.h > R.y ? R.y - z.y : z.h; // stop at the road: customers walk in along it
+      if (z.x > 0) fenceCol(g, z.x, z.y, fh, lw);
+      if (z.x + z.w < cols) fenceCol(g, z.x + z.w, z.y, fh, lw);
       g.fillStyle = 'rgba(255,255,255,.85)'; g.font = `600 ${T * .5}px Fredoka, sans-serif`; g.textAlign = 'center';
-      g.fillText('🔒 ' + z.name, 7 * T, (bottom - 2.2) * T);
+      g.fillText('🔒 ' + z.name, (z.x + z.w / 2) * T, (z.y + z.h / 2) * T);
     }
-    // trees along the edges
-    for (let y = 2; y < 43; y += 2.6) for (const x of [-.2, 14.2]) tree(g, x, y + hash(x, y) * 1.2, lw, th.leaves[Math.floor(hash(y, x) * th.leaves.length)], th.snow);
+    // trees round the edge (not across the road, where customers walk in) and filling the woods
+    const leaf = (x, y) => th.leaves[Math.floor(hash(y, x) * th.leaves.length)];
+    const edge = [];
+    for (let x = 1; x < cols; x += 2.6) edge.push([x + hash(x, 1) * 1.2, -.1]);
+    for (let y = 1.5; y < R.y - .5; y += 2.6) for (const x of [-.2, cols + .2]) edge.push([x, y + hash(x, y) * 1.2]);
+    for (let x = M.x + 1; x < M.x + M.w; x += 2.6) edge.push([x + hash(x, 2) * 1.2, rows + .1]);
+    for (let y = R.y + R.h + 1; y < rows; y += 2.6) for (const x of [M.x - .3, M.x + M.w + .3]) edge.push([x, y + hash(x, y) * 1.2]);
+    for (const b of W.blocked) for (let y = b.y + 1.4; y < b.y + b.h + .5; y += 1.7) for (let x = b.x + .8; x < b.x + b.w; x += 1.8) edge.push([x + (hash(x, y) - .5) * .8, y + (hash(y, x) - .5) * .6]);
+    edge.sort((p, q) => p[1] - q[1]);
+    for (const [x, y] of edge) tree(g, x, y, lw, leaf(x, y), th.snow);
     return c;
   }
   function fenceRect(g, x, y, w, h, lw) {
@@ -147,6 +172,12 @@ export function createArt(T, dpr) {
     g.fillStyle = '#C98A50'; g.strokeStyle = OUT; g.lineWidth = lw * .7;
     for (let i = 0; i <= w; i++) for (const yy of [y, y + h]) { rr(g, (x + i) * T - T * .08, yy * T - T * .16, T * .16, T * .3, T * .05); g.fill(); g.stroke(); }
     for (let i = 1; i < h; i++) for (const xx of [x, x + w]) { rr(g, xx * T - T * .08, (y + i) * T - T * .16, T * .16, T * .3, T * .05); g.fill(); g.stroke(); }
+  }
+  function fenceCol(g, x, y0, len, lw) {
+    g.fillStyle = '#C98A50'; g.strokeStyle = OUT; g.lineWidth = lw * .8;
+    rr(g, (x - .2) * T, y0 * T, T * .14, len * T, T * .05); g.fill(); g.stroke();
+    rr(g, (x + .06) * T, y0 * T, T * .14, len * T, T * .05); g.fill(); g.stroke();
+    for (let i = y0 + .25; i < y0 + len; i += .7) { rr(g, (x - .12) * T, (i - .08) * T, T * .24, T * .2, T * .06); g.fill(); g.stroke(); }
   }
   function fenceLine(g, x0, y, len, lw) {
     g.fillStyle = '#C98A50'; g.strokeStyle = OUT; g.lineWidth = lw * .8;

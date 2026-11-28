@@ -127,7 +127,7 @@ try {
   await page.click('.tile[data-go="farm"]'); await page.waitForFunction(() => document.querySelector('.fm')?._dbg, null, { timeout: 5000 });
   ok(/Level 1/.test(await page.textContent('.panel h2')), 'farm: a level intro shows the goal before the clock starts');
   await page.click('.panel .btn.primary'); // Start
-  await page.evaluate(() => { const d = document.querySelector('.fm')._dbg; d.P.x = 1.5; d.P.y = 31.5; });
+  await page.evaluate(() => { const d = document.querySelector('.fm')._dbg; const f = d.fields[0]; d.P.x = f.x + .5; d.P.y = f.y + .5; });
   await page.keyboard.down('ArrowRight'); await page.waitForTimeout(900); await page.keyboard.up('ArrowRight');
   const picked = await page.evaluate(() => document.querySelector('.fm')._dbg.P.stack.length);
   ok(picked >= 2, `farm: walking over carrots picks them (${picked} on your back)`);
